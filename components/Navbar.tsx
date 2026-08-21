@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Image from "next/image"
 import { ChevronDown, Menu, X } from "lucide-react"
+import Link from "next/link";
 
 const NAV_LINKS = ["Tools", "Features", "Why Choose", "Pricing", "FAQ"] as const
 
@@ -58,19 +59,19 @@ export default function Navbar() {
 
         {/* Desktop Buttons */}
         <div className="hidden items-center gap-3 lg:flex">
-          <button
-            type="button"
-            className="rounded-lg border border-white/15 px-5 py-2.5 text-[15px] font-medium text-white/90 transition-colors hover:border-white/30 hover:bg-white/5"
-          >
-            Login
-          </button>
+          <Link
+  href="/login"
+  className="rounded-lg border border-white/15 px-5 py-2.5 text-[15px] font-medium text-white/90 transition-colors hover:border-white/30 hover:bg-white/5"
+>
+  Login
+</Link>
 
-          <button
-            type="button"
-            className="rounded-lg bg-gradient-to-r from-[#4f46e5] to-[#3b82f6] px-5 py-2.5 text-[15px] font-semibold text-white shadow-lg shadow-blue-600/25 transition-all hover:from-[#4338ca] hover:to-[#2563eb] hover:shadow-blue-600/40"
-          >
-            Get Started Free
-          </button>
+          <Link
+  href="/signup"
+  className="rounded-lg bg-gradient-to-r from-[#4f46e5] to-[#3b82f6] px-5 py-2.5 text-[15px] font-semibold text-white shadow-lg shadow-blue-600/25 transition-all hover:from-[#4338ca] hover:to-[#2563eb] hover:shadow-blue-600/40"
+>
+  Get Started Free
+</Link>
         </div>
 
         {/* Mobile Toggle */}

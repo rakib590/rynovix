@@ -1,13 +1,13 @@
-import Navbar from "./components/Navbar";
-import Hero from "./components/Hero";
-import ToolGrid from "./components/ToolGrid";
-import Features from "./components/Features";
-import WhyChoose from "./components/WhyChoose";
-import Pricing from "./components/Pricing";
-import Stats from "./components/Stats";
-import Testimonials from "./components/Testimonials";
-import FAQ from "./components/FAQ";
-import Footer from "./components/Footer";
+import Navbar from "@/components/Navbar";
+import Hero from "@/components/Hero";
+import ToolGrid from "@/components/ToolGrid";
+import Features from "@/components/Features";
+import WhyChoose from "@/components/WhyChoose";
+import Pricing from "@/components/Pricing";
+import Stats from "@/components/Stats";
+import Testimonials from "@/components/Testimonials";
+import FAQ from "@/components/FAQ";
+import Footer from "@/components/Footer";
 
 export default function Home() {
   return (
