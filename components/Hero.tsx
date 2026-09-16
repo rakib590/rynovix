@@ -1,19 +1,27 @@
 import HeroLeft from "./HeroLeft";
-import HeroDashboard from "./HeroDashboard";
+import HeroRight from "./HeroRight";
 
 export default function Hero() {
   return (
-    <div className="relative flex min-h-screen flex-col">
-            <section className="flex flex-1 items-start px-4 pt-6 pb-8 sm:px-8 lg:px-12">
-        <div className="mx-auto flex w-full max-w-[1400px] flex-col items-center gap-12 lg:flex-row lg:gap-[48px]">
-          <div className="w-full lg:w-[35%]">
-            <HeroLeft />
-          </div>
-          <div className="w-full lg:w-[65%]">
-            <HeroDashboard />
-          </div>
+    <section className="relative overflow-hidden px-4 pt-6 pb-20 sm:px-8 lg:px-12">
+      {/* Background Glow */}
+      <div className="absolute inset-0 -z-10">
+        <div className="absolute left-1/2 top-16 h-[450px] w-[450px] -translate-x-1/2 rounded-full bg-blue-600/15 blur-[120px]" />
+
+        <div className="absolute bottom-0 left-1/2 h-[350px] w-[350px] -translate-x-1/2 rounded-full bg-purple-600/10 blur-[100px]" />
+      </div>
+
+      <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-14 lg:flex-row lg:items-center">
+        {/* Left Side */}
+        <div className="w-full lg:w-[55%]">
+          <HeroLeft />
         </div>
-      </section>
-    </div>
-  )
+
+        {/* Right Side */}
+        <div className="w-full lg:w-[45%]">
+          <HeroRight />
+        </div>
+      </div>
+    </section>
+  );
 }

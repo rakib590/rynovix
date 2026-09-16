@@ -2,34 +2,73 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useProfile } from "@/hooks/useProfile";
+
 import AvatarUpload from "@/components/profile/AvatarUpload";
+import ProfileHeader from "@/components/profile/ProfileHeader";
+import PersonalInfoCard from "@/components/profile/PersonalInfoCard";
+import SocialLinksCard from "@/components/profile/SocialLinksCard";
+import AccountStatusCard from "@/components/profile/AccountStatusCard";
+import SaveButton from "@/components/profile/SaveButton";
+
+interface ProfileData {
+  full_name?: string | null;
+  username?: string | null;
+  website?: string | null;
+  bio?: string | null;
+  avatar_url?: string | null;
+
+  youtube?: string | null;
+  facebook?: string | null;
+  instagram?: string | null;
+  x?: string | null;
+  linkedin?: string | null;
+
+  created_at?: string | null;
+}
 
 export default function ProfilePage() {
   const supabase = createClient();
 
+  const { profile, refreshProfile } = useProfile();
+
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const [uid, setUid] = useState("");
-
   const [email, setEmail] = useState("");
+
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [website, setWebsite] = useState("");
   const [bio, setBio] = useState("");
-
   const [avatarUrl, setAvatarUrl] = useState("");
+
+  const [youtube, setYoutube] = useState("");
+  const [facebook, setFacebook] = useState("");
+  const [instagram, setInstagram] = useState("");
+  const [x, setX] = useState("");
+  const [linkedin, setLinkedin] = useState("");
+
+  const [memberSince, setMemberSince] = useState("2026");
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
     async function loadProfile() {
+      setLoading(true);
+      setErrorMessage("");
+
       const {
         data: { user },
+        error: userError,
       } = await supabase.auth.getUser();
 
-      if (!user) {
+      if (userError || !user) {
+        setErrorMessage(
+          "Unable to load your account. Please login again."
+        );
         setLoading(false);
         return;
       }
@@ -37,24 +76,47 @@ export default function ProfilePage() {
       setUid(user.id);
       setEmail(user.email ?? "");
 
-      const { data: profile } = await supabase
+      const { data: profileData, error } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", user.id)
         .maybeSingle();
 
-      if (profile) {
-        setFullName(profile.full_name ?? "");
-        setUsername(profile.username ?? "");
-        setWebsite(profile.website ?? "");
-        setBio(profile.bio ?? "");
-        setAvatarUrl(profile.avatar_url ?? "");
-      } else {
-        setFullName(user.user_metadata?.full_name ?? "");
-        setUsername(user.user_metadata?.username ?? "");
-        setWebsite(user.user_metadata?.website ?? "");
-        setBio(user.user_metadata?.bio ?? "");
-        setAvatarUrl(user.user_metadata?.avatar_url ?? "");
+      if (error) {
+        console.error(error);
+        setErrorMessage(error.message);
+        setLoading(false);
+        return;
+      }
+
+      const data =
+        (profileData as ProfileData) ??
+        (user.user_metadata as ProfileData);
+
+      setFullName(data.full_name ?? "");
+      setUsername(data.username ?? "");
+      setWebsite(data.website ?? "");
+      setBio(data.bio ?? "");
+      setAvatarUrl(data.avatar_url ?? "");
+
+      setYoutube(data.youtube ?? "");
+      setFacebook(data.facebook ?? "");
+      setInstagram(data.instagram ?? "");
+      setX(data.x ?? "");
+      setLinkedin(data.linkedin ?? "");
+
+      if (profileData?.created_at) {
+        setMemberSince(
+          new Date(profileData.created_at)
+            .getFullYear()
+            .toString()
+        );
+      } else if (user.created_at) {
+        setMemberSince(
+          new Date(user.created_at)
+            .getFullYear()
+            .toString()
+        );
       }
 
       setLoading(false);
@@ -62,15 +124,12 @@ export default function ProfilePage() {
 
     loadProfile();
   }, [supabase]);
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-
+  async function handleSave() {
     if (!uid) {
       setErrorMessage("User not found. Please login again.");
       return;
     }
 
-    setSaving(true);
     setErrorMessage("");
     setSuccessMessage("");
 
@@ -79,159 +138,165 @@ export default function ProfilePage() {
       .upsert(
         {
           id: uid,
+
           full_name: fullName,
           username: username,
           website: website,
           bio: bio,
           avatar_url: avatarUrl || null,
+
+          youtube: youtube || null,
+          facebook: facebook || null,
+          instagram: instagram || null,
+          x: x || null,
+          linkedin: linkedin || null,
         },
         {
           onConflict: "id",
         }
       );
 
-    setSaving(false);
-
     if (error) {
+      console.error("Profile save error:", error);
       setErrorMessage(error.message);
-      return;
+      throw error;
     }
 
+    // Refresh Global Profile
+    await refreshProfile();
+
     setSuccessMessage("Profile updated successfully.");
+
+    setIsEditing(false);
+
+    setTimeout(() => {
+      setSuccessMessage("");
+    }, 3000);
   }
   if (loading) {
     return (
-      <div className="flex h-[70vh] items-center justify-center">
-        <p className="text-lg text-gray-400">
-          Loading profile...
-        </p>
+      <div className="flex min-h-[70vh] items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-blue-500" />
+
+          <p className="text-sm text-gray-400">
+            Loading profile...
+          </p>
+        </div>
       </div>
     );
   }
-
+  
   return (
-    <div className="mx-auto max-w-4xl">
-      <div className="mb-10 text-center">
-        <h1 className="text-4xl font-bold text-white">
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+
+      {/* Page Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-white sm:text-4xl">
           My Profile
         </h1>
 
-        <p className="mt-3 text-gray-400">
+        <p className="mt-2 text-sm text-gray-400 sm:text-base">
           Manage your personal information and account details.
         </p>
       </div>
 
-      <form
-        onSubmit={handleSave}
-        className="rounded-3xl border border-white/10 bg-[#0B1220] p-10 shadow-2xl"
-      >
-        {/* Avatar */}
-        <div className="mb-10 flex justify-center">
+      <div className="space-y-6">
+
+        <ProfileHeader
+          fullName={profile?.full_name ?? fullName}
+          username={profile?.username ?? username}
+          email={profile?.email ?? email}
+          avatarUrl={profile?.avatar_url ?? avatarUrl}
+          onEditProfile={() => {
+            setIsEditing(true);
+
+            setTimeout(() => {
+              document
+                .getElementById("personal-information")
+                ?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "center",
+                });
+            }, 100);
+          }}
+        />
+
+        <div className="rounded-3xl border border-white/10 bg-[#0B1220] p-6 shadow-xl sm:p-8">
+          <div className="mb-6">
+            <h2 className="text-xl font-bold text-white">
+              Profile Picture
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-400">
+              Upload a profile picture for your RYNOVIX account.
+            </p>
+          </div>
+
           <AvatarUpload
             uid={uid}
-            avatarUrl={avatarUrl}
-            onUpload={setAvatarUrl}
+            avatarUrl={profile?.avatar_url ?? avatarUrl}
+            isEditing={isEditing}
+            onUpload={(url) => {
+              setAvatarUrl(url);
+              refreshProfile();
+            }}
           />
         </div>
 
-        <div className="space-y-6">
-          {/* Full Name */}
-          <div>
-            <label className="mb-2 block text-sm text-gray-300">
-              Full Name
-            </label>
-
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Enter your full name"
-              className="w-full rounded-xl border border-white/10 bg-[#050814] px-4 py-3 text-white outline-none transition focus:border-blue-500"
-            />
-          </div>
-
-          {/* Username */}
-          <div>
-            <label className="mb-2 block text-sm text-gray-300">
-              Username
-            </label>
-
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter your username"
-              className="w-full rounded-xl border border-white/10 bg-[#050814] px-4 py-3 text-white outline-none transition focus:border-blue-500"
-            />
-          </div>
-
-          {/* Email */}
-          <div>
-            <label className="mb-2 block text-sm text-gray-300">
-              Email
-            </label>
-
-            <input
-              type="email"
-              value={email}
-              disabled
-              className="w-full cursor-not-allowed rounded-xl border border-white/10 bg-[#111827] px-4 py-3 text-gray-400"
-            />
-          </div>
-
-          {/* Website */}
-          <div>
-            <label className="mb-2 block text-sm text-gray-300">
-              Website
-            </label>
-
-            <input
-              type="text"
-              value={website}
-              onChange={(e) => setWebsite(e.target.value)}
-              placeholder="https://yourwebsite.com"
-              className="w-full rounded-xl border border-white/10 bg-[#050814] px-4 py-3 text-white outline-none transition focus:border-blue-500"
-            />
-          </div>
-          {/* Bio */}
-          <div>
-            <label className="mb-2 block text-sm text-gray-300">
-              Bio
-            </label>
-
-            <textarea
-              rows={5}
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              placeholder="Tell us about yourself..."
-              className="w-full rounded-xl border border-white/10 bg-[#050814] px-4 py-3 text-white outline-none transition focus:border-blue-500"
-            />
-          </div>
-
-          {/* Error Message */}
-          {errorMessage && (
-            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-400">
-              {errorMessage}
-            </div>
-          )}
-
-          {/* Success Message */}
-          {successMessage && (
-            <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-4 text-green-400">
-              {successMessage}
-            </div>
-          )}
-
-          {/* Save Button */}
-          <button
-            type="submit"
-            disabled={saving}
-            className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Save Changes"}
-          </button>
+        <div id="personal-information">
+          <PersonalInfoCard
+            fullName={fullName}
+            username={username}
+            email={profile?.email ?? email}
+            website={website}
+            bio={bio}
+            isEditing={isEditing}
+            onFullNameChange={setFullName}
+            onUsernameChange={setUsername}
+            onWebsiteChange={setWebsite}
+            onBioChange={setBio}
+          />
         </div>
-      </form>
+
+        <SocialLinksCard
+          youtube={youtube}
+          facebook={facebook}
+          instagram={instagram}
+          x={x}
+          linkedin={linkedin}
+          isEditing={isEditing}
+          onYoutubeChange={setYoutube}
+          onFacebookChange={setFacebook}
+          onInstagramChange={setInstagram}
+          onXChange={setX}
+          onLinkedinChange={setLinkedin}
+        />
+
+        <AccountStatusCard
+          currentPlan={profile?.current_plan ?? "Free"}
+          aiCredits={profile?.ai_credits ?? 100}
+          memberSince={profile?.member_since ?? memberSince}
+          verified={profile?.verified ?? true}
+        />
+
+        {errorMessage && (
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
+            {errorMessage}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="rounded-2xl border border-green-500/30 bg-green-500/10 p-4 text-sm text-green-400">
+            {successMessage}
+          </div>
+        )}
+
+        {isEditing && (
+          <SaveButton onSave={handleSave} />
+        )}
+
+      </div>
     </div>
   );
 }

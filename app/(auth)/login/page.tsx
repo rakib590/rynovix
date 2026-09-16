@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -10,6 +11,8 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] =
+  useState(false);
 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -138,17 +141,37 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="text-sm text-gray-300">Password</label>
+  <label className="text-sm text-gray-300">
+    Password
+  </label>
 
-            <input
-              type="password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="mt-2 w-full rounded-lg border border-gray-700 bg-[#0b1220] px-4 py-3 text-white outline-none focus:border-blue-500"
-            />
-          </div>
+  <div className="relative mt-2">
+
+    <input
+      type={showPassword ? "text" : "password"}
+      placeholder="Enter your password"
+      value={password}
+      onChange={(e) => setPassword(e.target.value)}
+      required
+      className="w-full rounded-lg border border-gray-700 bg-[#0b1220] px-4 py-3 pr-12 text-white outline-none focus:border-blue-500"
+    />
+
+    <button
+      type="button"
+      onClick={() =>
+        setShowPassword(!showPassword)
+      }
+      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-white"
+    >
+      {showPassword ? (
+        <EyeOff size={20} />
+      ) : (
+        <Eye size={20} />
+      )}
+    </button>
+
+  </div>
+</div>
 
           <div className="flex justify-end">
             <Link

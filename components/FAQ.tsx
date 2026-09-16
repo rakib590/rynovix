@@ -95,7 +95,7 @@ export default function FAQ() {
       <div className="mx-auto max-w-6xl rounded-3xl border border-[#252B45] bg-[#0a0f24]/60 px-6 py-14 shadow-[0_0_60px_-20px_rgba(59,130,246,0.35)] md:px-10">
         <div className="mx-auto mb-12 max-w-2xl text-center">
           <span className="inline-flex items-center gap-2 rounded-full border border-[#252B45] bg-[#111834] px-4 py-1.5 text-xs font-medium text-slate-300">
-            <Sparkles className="h-3.5 w-3.5 text-blue-400" aria-hidden="true" />
+            <Sparkles className="h-5 w-5 text-blue-400" aria-hidden="true" />
             FAQ
           </span>
           <h2 className="mt-5 bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500 bg-clip-text text-2xl font-bold uppercase tracking-wide text-transparent sm:text-3xl md:text-4xl text-balance">

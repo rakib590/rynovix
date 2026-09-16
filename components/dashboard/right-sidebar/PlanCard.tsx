@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   Crown,
   ArrowUpRight,
@@ -8,6 +9,8 @@ import {
 } from "lucide-react";
 
 export default function PlanCard() {
+  const router = useRouter();
+
   return (
     <div className="rounded-2xl border border-white/10 bg-[#0B1220] p-5">
 
@@ -24,7 +27,8 @@ export default function PlanCard() {
         />
 
       </div>
-      {/* Premium Card */}
+
+      {/* Plan Card */}
       <div className="rounded-2xl bg-gradient-to-br from-blue-600 via-cyan-500 to-indigo-600 p-4 text-white">
 
         <div className="flex items-center justify-between">
@@ -55,7 +59,9 @@ export default function PlanCard() {
 
         </div>
 
-        <div className="mt-4 space-y-2">
+        {/* Features */}
+
+        <div className="mt-5 space-y-3">
 
           <div className="flex items-center gap-3">
             <CheckCircle2 size={16} />
@@ -67,7 +73,7 @@ export default function PlanCard() {
           <div className="flex items-center gap-3">
             <CheckCircle2 size={16} />
             <span className="text-sm">
-              100 AI Credits / Month
+              Basic AI Features Included
             </span>
           </div>
 
@@ -81,37 +87,22 @@ export default function PlanCard() {
         </div>
 
       </div>
-      {/* AI Credits */}
-      <div className="mt-5 rounded-2xl border border-white/10 bg-[#050814] p-3">
-
-        <div className="mb-2 flex items-center justify-between">
-
-          <span className="text-sm text-gray-400">
-            AI Credits
-          </span>
-
-          <span className="text-sm font-semibold text-white">
-            100 / 100
-          </span>
-
-        </div>
-
-        <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-          <div className="h-full w-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400" />
-        </div>
-
-      </div>
 
       {/* Upgrade Button */}
+
       <button
-        className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 font-semibold text-white transition duration-300 hover:bg-blue-700"
+        type="button"
+        onClick={() => router.push("/dashboard/billing")}
+        className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 font-semibold text-white transition duration-300 hover:bg-blue-700"
       >
-        Upgrade to Pro
+        Upgrade Now
+
         <ArrowUpRight size={18} />
       </button>
 
-      <p className="mt-3 text-center text-xs text-gray-500">
-        Unlock premium AI tools and unlimited generations.
+      <p className="mt-3 text-center text-xs leading-5 text-gray-500">
+        Unlock Premium AI Tools, Faster Generation
+        and Higher Credit Limits.
       </p>
 
     </div>

@@ -102,6 +102,7 @@ export default function ToolGrid() {
         <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {TOOLS.map((tool, index) => {
             const Icon = tool.icon
+
             return (
               <li key={tool.title} className="group relative">
                 {/* Gradient glow on hover */}
@@ -109,26 +110,40 @@ export default function ToolGrid() {
                   aria-hidden
                   className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-br from-indigo-500/40 via-blue-500/20 to-fuchsia-500/40 opacity-0 blur transition-opacity duration-300 group-hover:opacity-100"
                 />
-                <div className="relative flex h-full flex-col rounded-2xl border border-border bg-card/60 p-5 backdrop-blur-sm transition-all duration-300 group-hover:-translate-y-1 group-hover:border-primary/50">
+
+                <div className="relative flex min-h-[245px] h-full flex-col rounded-2xl border border-border bg-card/60 p-5 backdrop-blur-sm transition-all duration-300 group-hover:-translate-y-1 group-hover:border-primary/50">
                   {/* Number badge + icon */}
                   <div className="mb-5 flex items-start justify-between">
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-secondary text-sm font-semibold text-muted-foreground">
                       {index + 1}
                     </span>
-                    <Icon className={`h-8 w-8 ${tool.iconColor}`} strokeWidth={2} aria-hidden />
+
+                    <Icon
+                      className={`h-8 w-8 ${tool.iconColor}`}
+                      strokeWidth={2}
+                      aria-hidden
+                    />
                   </div>
 
                   {/* Title + description */}
-                  <h3 className="text-lg font-semibold text-card-foreground">{tool.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{tool.description}</p>
+                  <h3 className="text-lg font-semibold text-card-foreground">
+                    {tool.title}
+                  </h3>
+
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {tool.description}
+                  </p>
 
                   {/* Launch link */}
                   <a
                     href="#"
-                    className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-sky-400 transition-colors hover:text-sky-300"
+                    className="mt-auto inline-flex items-center gap-1.5 pt-5 text-sm font-medium text-sky-400 transition-colors hover:text-sky-300"
                   >
                     Launch Tool
-                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
+                    <ArrowRight
+                      className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+                      aria-hidden
+                    />
                   </a>
                 </div>
               </li>
