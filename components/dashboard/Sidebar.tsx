@@ -65,35 +65,122 @@ export default function Sidebar({
 
   const supabase = createClient();
 
-  const [credits, setCredits] = useState(100);
+  const [credits, setCredits] = useState(0);
   const [plan, setPlan] = useState("Free");
+  const [resetIn, setResetIn] = useState("—");
 
   useEffect(() => {
-    async function loadProfile() {
+    let interval: ReturnType<typeof setInterval> | null =
+      null;
+
+    async function loadDashboard() {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        const response = await fetch(
+          "/api/dashboard",
+          {
+            cache: "no-store",
+          }
+        );
 
-        if (!user) return;
+        const data = await response.json();
 
-        const { data } = await supabase
-          .from("profiles")
-          .select("credits, current_plan")
-          .eq("id", user.id)
-          .single();
-
-        if (data) {
-          setCredits(data.credits ?? 100);
-          setPlan(data.current_plan ?? "Free");
+        if (!data.success) {
+          return;
         }
+
+        const statistics = data.statistics;
+
+        setCredits(
+          Number(
+            statistics?.creditsRemaining ?? 0
+          )
+        );
+
+        setPlan(
+          statistics?.currentPlan || "Free"
+        );
+
+        const resetAt =
+          statistics?.creditsResetAt;
+
+        if (!resetAt) {
+          setResetIn("—");
+          return;
+        }
+
+        updateCountdown(resetAt);
+
+        interval = setInterval(() => {
+          updateCountdown(resetAt);
+        }, 1000);
       } catch (error) {
-        console.error(error);
+        console.error(
+          "Failed to load dashboard:",
+          error
+        );
       }
     }
 
-    loadProfile();
+    loadDashboard();
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
   }, []);
+
+  function updateCountdown(resetAt: string) {
+    const resetTime =
+      new Date(resetAt).getTime();
+
+    const now = Date.now();
+
+    const difference =
+      resetTime - now;
+
+    if (difference <= 0) {
+      setResetIn("Resetting...");
+      return;
+    }
+
+    const totalSeconds = Math.floor(
+      difference / 1000
+    );
+
+    const days = Math.floor(
+      totalSeconds / 86400
+    );
+
+    const hours = Math.floor(
+      (totalSeconds % 86400) / 3600
+    );
+
+    const minutes = Math.floor(
+      (totalSeconds % 3600) / 60
+    );
+
+    const seconds =
+      totalSeconds % 60;
+
+    if (days > 0) {
+      setResetIn(
+        `${days}d ${hours}h`
+      );
+    } else if (hours > 0) {
+      setResetIn(
+        `${hours}h ${minutes}m`
+      );
+    } else if (minutes > 0) {
+      setResetIn(
+        `${minutes}m ${seconds}s`
+      );
+    } else {
+      setResetIn(
+        `${seconds}s`
+      );
+    }
+  }
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -105,6 +192,21 @@ export default function Sidebar({
   function handleNavigation() {
     onClose?.();
   }
+
+  const normalizedPlan =
+    plan.toLowerCase();
+
+  const monthlyCreditLimit =
+    normalizedPlan === "business"
+      ? 10000
+      : normalizedPlan === "pro"
+      ? 2000
+      : 100;
+
+  const creditPercentage = Math.min(
+    (credits / monthlyCreditLimit) * 100,
+    100
+  );
 
   return (
     <>
@@ -162,8 +264,11 @@ export default function Sidebar({
 
             const active =
               pathname === item.href ||
-              (item.href === "/dashboard/tools" &&
-                pathname.startsWith("/dashboard/tools/"));
+              (item.href ===
+                "/dashboard/tools" &&
+                pathname.startsWith(
+                  "/dashboard/tools/"
+                ));
 
             return (
               <Link
@@ -185,105 +290,113 @@ export default function Sidebar({
         </nav>
 
         {/* Credits & Plan */}
-<div className="px-4 pb-3">
-  <div className="rounded-xl border border-blue-500/20 bg-gradient-to-br from-[#101C38] to-[#0B1220] p-3">
-    
-    {/* Header */}
-    <div className="flex items-center gap-2">
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/15">
-        <Gauge size={16} className="text-blue-400" />
-      </div>
+        <div className="px-4 pb-3">
+          <div className="rounded-xl border border-blue-500/20 bg-gradient-to-br from-[#101C38] to-[#0B1220] p-3">
 
-      <div>
-        <h3 className="text-sm font-semibold text-white">
-          AI Credits
-        </h3>
+            {/* Header */}
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/15">
+                <Gauge
+                  size={16}
+                  className="text-blue-400"
+                />
+              </div>
 
-        <p className="text-[10px] text-slate-400">
-          Monthly Usage
-        </p>
-      </div>
-    </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white">
+                  AI Credits
+                </h3>
 
-    {/* Credits */}
-    <div className="mt-3">
-      <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-xs text-slate-400">
-          Credits
-        </span>
+                <p className="text-[10px] text-slate-400">
+                  Monthly Usage
+                </p>
+              </div>
+            </div>
 
-        <span className="text-xs font-semibold text-white">
-          {credits} / 100
-        </span>
-      </div>
+            {/* Credits */}
+            <div className="mt-3">
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-xs text-slate-400">
+                  Credits
+                </span>
 
-      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all"
-          style={{
-            width: `${Math.min(credits, 100)}%`,
-          }}
-        />
-      </div>
-    </div>
+                <span className="text-xs font-semibold text-white">
+                  {credits.toLocaleString()} /{" "}
+                  {monthlyCreditLimit.toLocaleString()}
+                </span>
+              </div>
 
-    {/* Reset + Plan */}
-    <div className="mt-2 grid grid-cols-2 gap-2">
-      
-      {/* Reset */}
-      <div className="rounded-lg bg-white/5 p-2">
-        <p className="text-[10px] text-slate-400">
-          Reset In
-        </p>
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-300"
+                  style={{
+                    width: `${creditPercentage}%`,
+                  }}
+                />
+              </div>
+            </div>
 
-        <p className="mt-0.5 text-xs font-semibold text-white">
-          18 Days
-        </p>
-      </div>
+            {/* Reset + Plan */}
+            <div className="mt-2 grid grid-cols-2 gap-2">
 
-      {/* Current Plan */}
-      <div className="rounded-lg border border-white/10 bg-[#0B1220] p-2">
-        <p className="text-[10px] text-slate-400">
-          Current Plan
-        </p>
+              {/* Reset */}
+              <div className="rounded-lg bg-white/5 p-2">
+                <p className="text-[10px] text-slate-400">
+                  Reset In
+                </p>
 
-        <div
-          className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 ${
-            plan.toLowerCase() === "pro"
-              ? "bg-yellow-500/10"
-              : plan.toLowerCase() === "business"
-              ? "bg-purple-500/10"
-              : "bg-green-500/10"
-          }`}
-        >
-          <span
-            className={`text-[10px] font-semibold ${
-              plan.toLowerCase() === "pro"
-                ? "text-yellow-400"
-                : plan.toLowerCase() === "business"
-                ? "text-purple-400"
-                : "text-green-400"
-            }`}
-          >
-            {plan.toUpperCase()}
-          </span>
+                <p className="mt-0.5 text-xs font-semibold text-white">
+                  {resetIn}
+                </p>
+              </div>
+
+              {/* Current Plan */}
+              <div className="rounded-lg border border-white/10 bg-[#0B1220] p-2">
+                <p className="text-[10px] text-slate-400">
+                  Current Plan
+                </p>
+
+                <div
+                  className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 ${
+                    normalizedPlan ===
+                    "pro"
+                      ? "bg-yellow-500/10"
+                      : normalizedPlan ===
+                        "business"
+                      ? "bg-purple-500/10"
+                      : "bg-green-500/10"
+                  }`}
+                >
+                  <span
+                    className={`text-[10px] font-semibold ${
+                      normalizedPlan ===
+                      "pro"
+                        ? "text-yellow-400"
+                        : normalizedPlan ===
+                          "business"
+                        ? "text-purple-400"
+                        : "text-green-400"
+                    }`}
+                  >
+                    {plan.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Upgrade */}
+            <Link
+              href="/dashboard/billing"
+              onClick={handleNavigation}
+              className="mt-2 flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
+            >
+              <Rocket size={13} />
+              Upgrade Now
+            </Link>
+
+          </div>
         </div>
-      </div>
-
-    </div>
-
-    {/* Upgrade */}
-    <Link
-      href="/dashboard/billing"
-      onClick={handleNavigation}
-      className="mt-2 flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
-    >
-      <Rocket size={13} />
-      Upgrade Now
-    </Link>
-
-  </div>
-</div>
 
         {/* Logout */}
         <div className="border-t border-white/10 p-4">

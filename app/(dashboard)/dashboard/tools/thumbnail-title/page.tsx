@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Copy,
   RefreshCcw,
@@ -10,6 +10,10 @@ import {
   Check,
 } from "lucide-react";
 import ToolLayout from "@/components/ai-tools/ToolLayout";
+import {
+  buildThumbnailPrompt,
+  buildThumbnailRegeneratePrompt,
+} from "@/lib/prompts/thumbnail";
 
 type ThumbnailTitleResult = {
   title: string;
@@ -66,6 +70,23 @@ const categories = [
 
 const titleCounts = ["5", "10", "15", "20"];
 
+// ============================================================
+// CREDIT COSTS
+// ============================================================
+
+const THUMBNAIL_TITLE_CREDIT_COSTS: Record<number, number> = {
+  5: 3,
+  10: 6,
+  15: 9,
+  20: 12,
+};
+
+const REGENERATE_CREDIT_COST = 2;
+
+// ============================================================
+// PAGE
+// ============================================================
+
 export default function ThumbnailTitlePage() {
   const [topic, setTopic] = useState("");
   const [keywords, setKeywords] = useState("");
@@ -76,17 +97,66 @@ export default function ThumbnailTitlePage() {
   const [titleCount, setTitleCount] = useState("5");
   const [creativity, setCreativity] = useState(70);
 
+  const [credits, setCredits] = useState(0);
+
   const [loading, setLoading] = useState(false);
   const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(
     null
   );
+
   const [error, setError] = useState("");
   const [results, setResults] = useState<ThumbnailTitleResult[]>([]);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
 
+  const selectedTitleCount = Number(titleCount);
+
+  const generateCreditCost =
+    THUMBNAIL_TITLE_CREDIT_COSTS[selectedTitleCount] ?? 0;
+
+  // ============================================================
+  // LOAD CREDITS
+  // ============================================================
+
+  useEffect(() => {
+    async function loadCredits() {
+      try {
+        const response = await fetch("/api/credits");
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          setCredits(Number(data.credits ?? 0));
+        }
+      } catch (error) {
+        console.error("Failed to load credits:", error);
+      }
+    }
+
+    loadCredits();
+  }, []);
+
+  // ============================================================
+  // UPDATE CREDITS
+  // ============================================================
+
+  const updateCreditsFromResponse = (data: any) => {
+    if (typeof data?.credits === "number") {
+      setCredits(data.credits);
+    } else if (typeof data?.remainingCredits === "number") {
+      setCredits(data.remainingCredits);
+    }
+  };
+
+  // ============================================================
+  // CLAMP SCORE
+  // ============================================================
+
   const clamp = (value: number) =>
     Math.max(0, Math.min(100, Number(value) || 0));
+
+  // ============================================================
+  // SANITIZE RESULT
+  // ============================================================
 
   const sanitizeResult = (item: any): ThumbnailTitleResult => ({
     title: String(item?.title || "Untitled Thumbnail Title").trim(),
@@ -97,85 +167,20 @@ export default function ThumbnailTitlePage() {
     favorite: false,
   });
 
-  const buildPrompt = (count: number) => {
-    return `
-You are an expert YouTube thumbnail strategist and high-CTR content consultant.
-
-Generate exactly ${count} UNIQUE YouTube thumbnail titles/text ideas.
-
-USER INPUT
-Topic: ${topic.trim()}
-Keywords: ${keywords.trim() || "None"}
-Language: ${language}
-Tone: ${tone}
-Target Audience: ${audience}
-Category: ${category}
-Creativity Level: ${creativity}/100
-
-IMPORTANT LANGUAGE RULES:
-1. If Language is "🌐 Auto Detect", detect the primary language of the user's Topic and Keywords.
-2. If a specific Language is selected, use ONLY that selected language for the main title.
-3. English = natural fluent English.
-4. বাংলা = natural Bengali using Bengali script.
-5. हिन्दी = natural Hindi using Devanagari script.
-6. Spanish = natural fluent Spanish.
-7. French = natural fluent French.
-8. German = natural fluent German.
-9. Arabic = natural fluent Arabic.
-10. If the user's input naturally mixes languages, preserve natural mixed expressions where appropriate.
-11. Do NOT translate word-for-word.
-12. Make every title sound natural for a native speaker.
-
-THUMBNAIL TITLE REQUIREMENTS:
-- These are THUMBNAIL TEXT ideas, NOT normal YouTube video titles.
-- Keep them SHORT and punchy.
-- Prefer approximately 2–7 words when possible.
-- Make them readable at a glance on a thumbnail.
-- Strongly prioritize curiosity and emotional impact.
-- Use powerful but natural words.
-- Create a clear visual/message concept.
-- Avoid unnecessary filler words.
-- Avoid long sentences.
-- Avoid excessive punctuation.
-- Do not use misleading clickbait.
-- Do not repeat the same wording across ideas.
-- Every idea must feel meaningfully different.
-- Make the titles suitable for large bold thumbnail typography.
-- Do not include quotation marks around the title.
-
-SCORE DEFINITIONS:
-- score = estimated overall thumbnail title quality from 0–100.
-- ctr = estimated CTR potential from 0–100. This is an AI estimate, NOT actual analytics.
-- curiosity = estimated curiosity strength from 0–100.
-- engagement = estimated audience engagement potential from 0–100.
-
-IMPORTANT:
-Do not claim these are real-time CTR predictions.
-Do not claim access to YouTube analytics.
-Do not guarantee clicks or views.
-
-Return ONLY valid JSON.
-Do not use markdown.
-Do not add explanations outside JSON.
-
-Required JSON format:
-{
-  "results": [
-    {
-      "title": "Short powerful thumbnail text",
-      "score": 95,
-      "ctr": 92,
-      "curiosity": 96,
-      "engagement": 91
-    }
-  ]
-}
-`;
-  };
+  // ============================================================
+  // GENERATE TITLES
+  // ============================================================
 
   const generateTitles = async () => {
     if (!topic.trim()) {
       setError("Please enter a topic first.");
+      return;
+    }
+
+    if (credits < generateCreditCost) {
+      setError(
+        `You need ${generateCreditCost} credits to generate ${selectedTitleCount} titles.`
+      );
       return;
     }
 
@@ -185,14 +190,28 @@ Required JSON format:
     setCopiedAll(false);
 
     try {
+      const prompt = buildThumbnailPrompt({
+        topic,
+        keywords,
+        language,
+        tone,
+        audience,
+        category,
+        creativity,
+        count: selectedTitleCount,
+      });
+
       const response = await fetch("/api/ai", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          prompt: buildPrompt(Number(titleCount)),
+          prompt,
           json: true,
+          toolId: "thumbnail-title",
+          count: selectedTitleCount,
+          action: "generate",
         }),
       });
 
@@ -203,6 +222,8 @@ Required JSON format:
           data?.error || "Failed to generate thumbnail titles."
         );
       }
+
+      updateCreditsFromResponse(data);
 
       let parsed: any;
 
@@ -220,7 +241,7 @@ Required JSON format:
       }
 
       const titles = parsed.results
-        .slice(0, Number(titleCount))
+        .slice(0, selectedTitleCount)
         .map(sanitizeResult)
         .sort(
           (a: ThumbnailTitleResult, b: ThumbnailTitleResult) =>
@@ -240,60 +261,37 @@ Required JSON format:
     }
   };
 
+  // ============================================================
+  // REGENERATE ONE TITLE
+  // ============================================================
+
   const regenerateTitle = async (index: number) => {
-    if (!topic.trim()) return;
+    if (!topic.trim()) {
+      setError("Please enter a topic first.");
+      return;
+    }
+
+    if (credits < REGENERATE_CREDIT_COST) {
+      setError(
+        `You need ${REGENERATE_CREDIT_COST} credits to regenerate a title.`
+      );
+      return;
+    }
 
     setRegeneratingIndex(index);
     setError("");
 
     try {
-      const prompt = `
-You are an expert YouTube thumbnail strategist.
-
-Generate ONE completely new and unique YouTube thumbnail text idea.
-
-Topic: ${topic.trim()}
-Keywords: ${keywords.trim() || "None"}
-Language: ${language}
-Tone: ${tone}
-Target Audience: ${audience}
-Category: ${category}
-Creativity: ${creativity}/100
-
-Existing thumbnail titles:
-${results.map((item, i) => `${i + 1}. ${item.title}`).join("\n")}
-
-The new title MUST be different from every existing title.
-
-THUMBNAIL TITLE RULES:
-- This is thumbnail text, NOT a normal YouTube video title.
-- Keep it short and punchy.
-- Prefer approximately 2–7 words.
-- It must be readable at a glance.
-- Prioritize curiosity and emotional impact.
-- Make it suitable for large bold thumbnail typography.
-- Avoid filler.
-- Avoid misleading clickbait.
-- Do not use quotation marks around the title.
-
-LANGUAGE RULES:
-- If Language is "🌐 Auto Detect", detect the primary language of the Topic and Keywords.
-- If a specific language is selected, use ONLY that language.
-- বাংলা must use Bengali script.
-- हिन्दी must use Devanagari script.
-- Preserve natural mixed-language expressions when appropriate.
-
-Return ONLY valid JSON:
-{
-  "title": "Short powerful thumbnail text",
-  "score": 95,
-  "ctr": 92,
-  "curiosity": 96,
-  "engagement": 91
-}
-
-Do not use markdown.
-`;
+      const prompt = buildThumbnailRegeneratePrompt({
+        topic,
+        keywords,
+        language,
+        tone,
+        audience,
+        category,
+        creativity,
+        existingTitles: results.map((item) => item.title),
+      });
 
       const response = await fetch("/api/ai", {
         method: "POST",
@@ -303,6 +301,9 @@ Do not use markdown.
         body: JSON.stringify({
           prompt,
           json: true,
+          toolId: "thumbnail-title",
+          count: 1,
+          action: "regenerate",
         }),
       });
 
@@ -313,6 +314,8 @@ Do not use markdown.
           data?.error || "Failed to regenerate thumbnail title."
         );
       }
+
+      updateCreditsFromResponse(data);
 
       let parsed: any;
 
@@ -325,20 +328,22 @@ Do not use markdown.
         throw new Error("AI returned invalid JSON.");
       }
 
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("AI returned an unexpected result format.");
+      }
+
       const newTitle = sanitizeResult(parsed);
 
-      setResults((current) => {
-        const updated = current.map((item, i) =>
+      setResults((current) =>
+        current.map((item, i) =>
           i === index
             ? {
                 ...newTitle,
                 favorite: item.favorite,
               }
             : item
-        );
-
-        return updated.sort((a, b) => b.score - a.score);
-      });
+        )
+      );
     } catch (err: any) {
       console.error("REGENERATE THUMBNAIL TITLE ERROR:", err);
       setError(err?.message || "Failed to regenerate title.");
@@ -346,6 +351,10 @@ Do not use markdown.
       setRegeneratingIndex(null);
     }
   };
+
+  // ============================================================
+  // FAVORITE
+  // ============================================================
 
   const toggleFavorite = (index: number) => {
     setResults((current) =>
@@ -355,6 +364,10 @@ Do not use markdown.
     );
   };
 
+  // ============================================================
+  // COPY ONE
+  // ============================================================
+
   const copyTitle = async (title: string, index: number) => {
     try {
       await navigator.clipboard.writeText(title);
@@ -362,12 +375,18 @@ Do not use markdown.
       setCopiedIndex(index);
 
       setTimeout(() => {
-        setCopiedIndex((current) => (current === index ? null : current));
+        setCopiedIndex((current) =>
+          current === index ? null : current
+        );
       }, 1800);
     } catch {
       setError("Failed to copy title.");
     }
   };
+
+  // ============================================================
+  // COPY ALL
+  // ============================================================
 
   const copyAllTitles = async () => {
     if (!results.length) return;
@@ -389,7 +408,15 @@ Do not use markdown.
     }
   };
 
+  // ============================================================
+  // BEST TITLE
+  // ============================================================
+
   const bestIndex = results.length > 0 ? 0 : -1;
+
+  // ============================================================
+  // UI
+  // ============================================================
 
   return (
     <ToolLayout
@@ -401,12 +428,23 @@ Do not use markdown.
         {/* =========================================
             LEFT - GENERATOR
         ========================================= */}
+
         <div className="min-w-0 rounded-3xl border border-white/10 bg-[#050814] p-4 sm:p-6">
-          <h2 className="mb-5 text-lg font-bold text-white sm:mb-6 sm:text-xl">
-            Generator
-          </h2>
+
+          {/* Header */}
+
+          <div className="mb-5 flex items-center justify-between gap-3 sm:mb-6">
+            <h2 className="text-lg font-bold text-white sm:text-xl">
+              Generator
+            </h2>
+
+            <span className="shrink-0 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-400">
+              {credits} Credits
+            </span>
+          </div>
 
           {/* Topic */}
+
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Topic
@@ -428,6 +466,7 @@ Do not use markdown.
           </div>
 
           {/* Keywords */}
+
           <div className="mt-5">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Keywords
@@ -442,6 +481,7 @@ Do not use markdown.
           </div>
 
           {/* Language */}
+
           <div className="mt-5">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Language
@@ -461,6 +501,7 @@ Do not use markdown.
           </div>
 
           {/* Tone */}
+
           <div className="mt-5">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Tone
@@ -480,6 +521,7 @@ Do not use markdown.
           </div>
 
           {/* Audience */}
+
           <div className="mt-5">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Target Audience
@@ -499,6 +541,7 @@ Do not use markdown.
           </div>
 
           {/* Category */}
+
           <div className="mt-5">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Category
@@ -518,6 +561,7 @@ Do not use markdown.
           </div>
 
           {/* Title Count */}
+
           <div className="mt-5">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Title Count
@@ -537,6 +581,7 @@ Do not use markdown.
           </div>
 
           {/* Creativity */}
+
           <div className="mt-6">
             <div className="mb-3 flex items-center justify-between gap-3">
               <label className="text-sm font-medium text-slate-300">
@@ -553,7 +598,9 @@ Do not use markdown.
               min="0"
               max="100"
               value={creativity}
-              onChange={(e) => setCreativity(Number(e.target.value))}
+              onChange={(e) =>
+                setCreativity(Number(e.target.value))
+              }
               className="w-full accent-blue-500"
             />
 
@@ -563,7 +610,24 @@ Do not use markdown.
             </div>
           </div>
 
+          {/* Credit Info */}
+
+          <div className="mt-5 rounded-xl border border-blue-500/10 bg-blue-500/[0.04] px-3.5 py-3 text-xs text-slate-400">
+            Generate {selectedTitleCount} titles ={" "}
+            <span className="font-semibold text-blue-400">
+              {generateCreditCost} credits
+            </span>
+
+            <br />
+
+            Regenerate ={" "}
+            <span className="font-semibold text-purple-400">
+              {REGENERATE_CREDIT_COST} credits
+            </span>
+          </div>
+
           {/* Error */}
+
           {error && (
             <div className="mt-5 break-words rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm leading-5 text-red-400">
               {error}
@@ -571,21 +635,32 @@ Do not use markdown.
           )}
 
           {/* Generate Button */}
+
           <button
             type="button"
             onClick={generateTitles}
-            disabled={loading || !topic.trim()}
+            disabled={
+              loading ||
+              !topic.trim() ||
+              credits < generateCreditCost
+            }
             className="mt-6 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:scale-[1.01] hover:shadow-blue-500/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 sm:px-5"
           >
             {loading ? (
               <>
-                <RefreshCcw size={18} className="shrink-0 animate-spin" />
+                <RefreshCcw
+                  size={18}
+                  className="shrink-0 animate-spin"
+                />
                 Generating...
               </>
             ) : (
               <>
-                <Sparkles size={18} className="shrink-0" />
-                Generate Titles
+                <Sparkles
+                  size={18}
+                  className="shrink-0"
+                />
+                Generate Titles • {generateCreditCost} Credits
               </>
             )}
           </button>
@@ -594,9 +669,11 @@ Do not use markdown.
         {/* =========================================
             RIGHT - RESULTS
         ========================================= */}
+
         <div className="min-w-0 rounded-3xl border border-white/10 bg-[#050814] p-4 sm:p-6">
 
           {/* Results Header */}
+
           <div className="mb-5 flex flex-col gap-4 sm:mb-6 lg:flex-row lg:items-center lg:justify-between">
 
             <div className="min-w-0">
@@ -616,20 +693,33 @@ Do not use markdown.
                   {results.length} Results
                 </span>
 
+                {/* Copy All */}
+
                 <button
                   type="button"
                   onClick={copyAllTitles}
                   className="inline-flex min-h-[36px] items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-blue-500/30 hover:bg-blue-500/10 hover:text-white"
                 >
-                  {copiedAll ? <Check size={15} /> : <Copy size={15} />}
+                  {copiedAll ? (
+                    <Check size={15} />
+                  ) : (
+                    <Copy size={15} />
+                  )}
+
                   {copiedAll ? "Copied" : "Copy All"}
                 </button>
+
+                {/* Generate Again */}
 
                 <button
                   type="button"
                   onClick={generateTitles}
-                  disabled={loading}
-                  title="Generate Again"
+                  disabled={
+                    loading ||
+                    !topic.trim() ||
+                    credits < generateCreditCost
+                  }
+                  title={`Generate Again • ${generateCreditCost} Credits`}
                   className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-300 transition hover:border-blue-500/30 hover:bg-blue-500/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <RefreshCcw
@@ -637,16 +727,19 @@ Do not use markdown.
                     className={loading ? "animate-spin" : ""}
                   />
                 </button>
-
               </div>
             )}
           </div>
 
           {/* Empty State */}
+
           {results.length === 0 ? (
             <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 px-5 py-10 sm:min-h-[520px]">
 
-              <ImageIcon size={42} className="text-blue-400" />
+              <ImageIcon
+                size={42}
+                className="text-blue-400"
+              />
 
               <h3 className="mt-5 text-center text-lg font-semibold text-white sm:text-xl">
                 No Thumbnail Titles Yet
@@ -662,7 +755,8 @@ Do not use markdown.
 
               {results.map((result, index) => {
                 const isBest = index === bestIndex;
-                const isRegenerating = regeneratingIndex === index;
+                const isRegenerating =
+                  regeneratingIndex === index;
 
                 return (
                   <div
@@ -671,6 +765,7 @@ Do not use markdown.
                   >
 
                     {/* Header */}
+
                     <div className="flex min-w-0 flex-col gap-3">
 
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -688,6 +783,7 @@ Do not use markdown.
                       </div>
 
                       {/* Score Badges */}
+
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
 
                         <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-emerald-400 sm:px-3 sm:text-xs">
@@ -707,15 +803,16 @@ Do not use markdown.
                         </div>
 
                       </div>
-
                     </div>
 
                     {/* Title */}
+
                     <h3 className="mt-4 break-words text-xl font-bold leading-tight text-white sm:text-2xl">
                       {result.title}
                     </h3>
 
                     {/* Thumbnail Preview */}
+
                     <div className="mt-5 overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-[#111827] via-[#0B1220] to-[#111827] sm:rounded-2xl">
 
                       <div className="flex min-h-[140px] items-center justify-center px-4 py-8 sm:min-h-[170px] sm:px-8 sm:py-10">
@@ -729,6 +826,7 @@ Do not use markdown.
                     </div>
 
                     {/* Info */}
+
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
 
                       <span className="text-[11px] text-slate-600 sm:text-xs">
@@ -742,12 +840,16 @@ Do not use markdown.
                     </div>
 
                     {/* Actions */}
+
                     <div className="mt-4 flex items-center justify-end gap-2 border-t border-white/5 pt-4">
 
                       {/* Copy */}
+
                       <button
                         type="button"
-                        onClick={() => copyTitle(result.title, index)}
+                        onClick={() =>
+                          copyTitle(result.title, index)
+                        }
                         disabled={isRegenerating}
                         title="Copy Title"
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:border-blue-500/30 hover:bg-blue-500/10 hover:text-blue-400 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10"
@@ -760,9 +862,12 @@ Do not use markdown.
                       </button>
 
                       {/* Favorite */}
+
                       <button
                         type="button"
-                        onClick={() => toggleFavorite(index)}
+                        onClick={() =>
+                          toggleFavorite(index)
+                        }
                         disabled={isRegenerating}
                         title={
                           result.favorite
@@ -777,36 +882,47 @@ Do not use markdown.
                       >
                         <Heart
                           size={16}
-                          fill={result.favorite ? "currentColor" : "none"}
+                          fill={
+                            result.favorite
+                              ? "currentColor"
+                              : "none"
+                          }
                         />
                       </button>
 
                       {/* Regenerate */}
+
                       <button
                         type="button"
-                        onClick={() => regenerateTitle(index)}
-                        disabled={isRegenerating}
-                        title="Regenerate Title"
+                        onClick={() =>
+                          regenerateTitle(index)
+                        }
+                        disabled={
+                          isRegenerating ||
+                          credits < REGENERATE_CREDIT_COST
+                        }
+                        title={`Regenerate Title • ${REGENERATE_CREDIT_COST} Credits`}
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:border-purple-500/30 hover:bg-purple-500/10 hover:text-purple-400 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10"
                       >
                         <RefreshCcw
                           size={16}
                           className={
-                            isRegenerating ? "animate-spin" : ""
+                            isRegenerating
+                              ? "animate-spin"
+                              : ""
                           }
                         />
                       </button>
 
                     </div>
-
                   </div>
                 );
               })}
-
             </div>
           )}
 
           {/* Disclaimer */}
+
           {results.length > 0 && (
             <p className="mt-5 px-2 text-center text-[10px] leading-5 text-slate-600 sm:text-xs">
               CTR, Curiosity and Engagement are AI estimates, not real-time

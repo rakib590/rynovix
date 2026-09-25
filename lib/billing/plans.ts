@@ -56,7 +56,7 @@ export const plans: Plan[] = [
     popular: true,
 
     features: [
-      "1,000 AI Credits / month",
+      "2,000 AI Credits / month",
       "All Version 1.0 AI Tools",
       "Fast AI Generation",
       "Priority Processing",
@@ -78,7 +78,7 @@ export const plans: Plan[] = [
     yearlyPriceId: "price_business_yearly",
 
     features: [
-      "5,000 AI Credits / month",
+      "10,000 AI Credits / month",
       "Everything in Pro",
       "Highest AI Generation Priority",
       "Future AI Tools Included",

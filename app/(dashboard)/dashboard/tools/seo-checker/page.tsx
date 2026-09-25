@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Copy,
   RefreshCcw,
-  Sparkles,
   Search,
   Check,
   AlertCircle,
@@ -14,6 +13,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import ToolLayout from "@/components/ai-tools/ToolLayout";
+import { buildSEOPrompt } from "@/lib/prompts/seo";
 
 type SEOResult = {
   overallScore: number;
@@ -51,6 +51,8 @@ const categories = [
   "Travel",
   "Comedy",
 ];
+
+const SEO_CHECKER_CREDIT_COST = 3;
 
 const clamp = (value: number) =>
   Math.max(0, Math.min(100, Number(value) || 0));
@@ -90,151 +92,61 @@ export default function SEOCheckerPage() {
   const [language, setLanguage] = useState("🌐 Auto Detect");
   const [category, setCategory] = useState("General");
 
+  const [credits, setCredits] = useState(0);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const [result, setResult] = useState<SEOResult | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const buildPrompt = () => {
-    return `
-You are an expert YouTube SEO strategist and content optimization consultant.
+  // ============================================================
+  // LOAD CREDITS
+  // ============================================================
 
-Analyze the user's YouTube video information and provide a detailed SEO evaluation.
+  useEffect(() => {
+    async function loadCredits() {
+      try {
+        const response = await fetch("/api/credits");
+        const data = await response.json();
 
-USER INPUT
+        if (response.ok && data?.success) {
+          setCredits(Number(data.credits ?? 0));
+        }
+      } catch (error) {
+        console.error("Failed to load credits:", error);
+      }
+    }
 
-Video Title:
-${title.trim() || "Not provided"}
+    loadCredits();
+  }, []);
 
-Video Description:
-${description.trim() || "Not provided"}
+  // ============================================================
+  // UPDATE CREDITS FROM API RESPONSE
+  // ============================================================
 
-Keywords:
-${keywords.trim() || "Not provided"}
-
-Language:
-${language}
-
-Category:
-${category}
-
-IMPORTANT LANGUAGE RULES:
-1. If Language is "🌐 Auto Detect", detect the primary language of the user's input.
-2. If a specific Language is selected, write recommendations primarily in that language.
-3. বাংলা must use Bengali script.
-4. हिन्दी must use Devanagari script.
-5. English must be natural fluent English.
-6. Spanish, French, German and Arabic must be natural and fluent.
-7. Do not translate word-for-word.
-8. Recommendations should sound natural for the selected language.
-
-SEO ANALYSIS REQUIREMENTS:
-
-Analyze these areas:
-
-1. Overall SEO Score
-Give an estimated overall SEO quality score from 0–100.
-
-2. Title Score
-Evaluate:
-- Keyword relevance
-- Search intent
-- Clarity
-- Topic alignment
-- Natural wording
-- Potential discoverability
-- Appropriate title length
-
-3. Description Score
-Evaluate:
-- Keyword usage
-- Topic relevance
-- Natural language
-- Useful information
-- Search context
-- Readability
-- Description structure
-
-4. Keyword Score
-Evaluate:
-- Keyword relevance
-- Keyword coverage
-- Search intent
-- Specificity
-- Long-tail keyword opportunities
-- Natural keyword usage
-
-5. Search Intent Score
-Evaluate whether the title, description and keywords clearly match what a viewer may search for.
-
-6. Readability Score
-Evaluate:
-- Clarity
-- Simplicity
-- Sentence structure
-- Easy scanning
-- Natural wording
-
-IMPORTANT:
-- Do NOT claim access to YouTube's private analytics.
-- Do NOT claim real-time YouTube search volume.
-- Do NOT claim exact ranking positions.
-- Do NOT guarantee views, clicks or rankings.
-- These are AI-based SEO estimates only.
-- Do not invent real-time statistics.
-- Be practical and useful.
-- Avoid keyword stuffing.
-- Avoid misleading clickbait.
-
-STRENGTHS:
-Provide 3–5 specific strengths.
-
-IMPROVEMENTS:
-Provide 3–5 specific areas that could be improved.
-
-RECOMMENDATIONS:
-Provide 5–8 practical recommendations.
-Recommendations should be specific to the user's actual title, description and keywords.
-
-IMPORTANT:
-Return ONLY valid JSON.
-Do not use markdown.
-Do not add explanations outside JSON.
-
-Required JSON format:
-
-{
-  "overallScore": 85,
-  "titleScore": 88,
-  "descriptionScore": 82,
-  "keywordScore": 84,
-  "searchIntentScore": 90,
-  "readabilityScore": 86,
-  "strengths": [
-    "Clear and relevant video title",
-    "Strong topic alignment",
-    "Natural keyword usage"
-  ],
-  "improvements": [
-    "Add a stronger primary keyword",
-    "Improve the opening of the description",
-    "Use more specific long-tail keywords"
-  ],
-  "recommendations": [
-    "Place the primary keyword naturally near the beginning of the title",
-    "Make the first two lines of the description more informative",
-    "Add relevant long-tail keyword variations",
-    "Avoid repeating the same keyword too often",
-    "Make the title closely match the viewer's search intent"
-  ]
-}
-`;
+  const updateCreditsFromResponse = (data: any) => {
+    if (typeof data?.credits === "number") {
+      setCredits(data.credits);
+    } else if (typeof data?.remainingCredits === "number") {
+      setCredits(data.remainingCredits);
+    }
   };
+
+  // ============================================================
+  // CHECK SEO
+  // ============================================================
 
   const checkSEO = async () => {
     if (!title.trim() && !description.trim() && !keywords.trim()) {
       setError("Please enter a title, description or keywords first.");
+      return;
+    }
+
+    if (credits < SEO_CHECKER_CREDIT_COST) {
+      setError(
+        `You need ${SEO_CHECKER_CREDIT_COST} credits to check SEO, but you only have ${credits}.`
+      );
       return;
     }
 
@@ -243,22 +155,36 @@ Required JSON format:
     setCopied(false);
 
     try {
+      const prompt = buildSEOPrompt({
+        title,
+        description,
+        keywords,
+        language,
+        category,
+      });
+
       const response = await fetch("/api/ai", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          prompt: buildPrompt(),
+          prompt,
           json: true,
+          toolId: "seo-checker",
+          action: "generate",
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok || !data?.success) {
-        throw new Error(data?.error || "Failed to analyze SEO.");
+        throw new Error(
+          data?.error || "Failed to analyze SEO."
+        );
       }
+
+      updateCreditsFromResponse(data);
 
       let parsed: any;
 
@@ -268,7 +194,19 @@ Required JSON format:
             ? JSON.parse(data.result)
             : data.result;
       } catch {
-        throw new Error("AI returned invalid JSON. Please try again.");
+        throw new Error(
+          "AI returned invalid JSON. Please try again."
+        );
+      }
+
+      if (
+        !parsed ||
+        typeof parsed !== "object" ||
+        Array.isArray(parsed)
+      ) {
+        throw new Error(
+          "AI returned an unexpected result format."
+        );
       }
 
       const seoResult = sanitizeResult(parsed);
@@ -282,6 +220,10 @@ Required JSON format:
     }
   };
 
+  // ============================================================
+  // SCORE LABEL
+  // ============================================================
+
   const getScoreLabel = (score: number) => {
     if (score >= 90) return "Excellent";
     if (score >= 80) return "Very Good";
@@ -289,6 +231,10 @@ Required JSON format:
     if (score >= 60) return "Needs Improvement";
     return "Needs Work";
   };
+
+  // ============================================================
+  // COPY REPORT
+  // ============================================================
 
   const copyReport = async () => {
     if (!result) return;
@@ -338,6 +284,10 @@ search volume data, ranking positions, or guarantees.
     }
   };
 
+  // ============================================================
+  // SCORE BAR CLASS
+  // ============================================================
+
   const getScoreBarClass = (score: number) => {
     if (score >= 90) return "bg-emerald-500";
     if (score >= 75) return "bg-blue-500";
@@ -345,21 +295,37 @@ search volume data, ranking positions, or guarantees.
     return "bg-red-500";
   };
 
+  // ============================================================
+  // UI
+  // ============================================================
+
   return (
     <ToolLayout
       title="AI SEO Checker"
       description="Analyze your YouTube title, description and keywords with AI-powered SEO insights."
     >
       <div className="grid min-w-0 gap-6 sm:gap-8 xl:grid-cols-[420px_minmax(0,1fr)]">
+
         {/* =========================================================
             LEFT - SEO INPUT
         ========================================================== */}
+
         <div className="min-w-0 rounded-3xl border border-white/10 bg-[#050814] p-4 sm:p-6">
-          <h2 className="mb-6 text-xl font-bold text-white">
-            SEO Checker
-          </h2>
+
+          {/* Header */}
+
+          <div className="mb-5 flex items-center justify-between gap-3 sm:mb-6">
+            <h2 className="text-lg font-bold text-white sm:text-xl">
+              SEO Checker
+            </h2>
+
+            <span className="shrink-0 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-400">
+              {credits} Credits
+            </span>
+          </div>
 
           {/* Title */}
+
           <div className="min-w-0">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Video Title
@@ -367,7 +333,13 @@ search volume data, ranking positions, or guarantees.
 
             <textarea
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+
+                if (error) {
+                  setError("");
+                }
+              }}
               placeholder="e.g. 10 Best AI Tools for YouTube Creators"
               rows={3}
               className="box-border w-full min-w-0 resize-none rounded-xl border border-white/10 bg-[#0B1220] px-4 py-3 text-sm text-white outline-none transition focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/30 placeholder:text-slate-600"
@@ -380,6 +352,7 @@ search volume data, ranking positions, or guarantees.
           </div>
 
           {/* Description */}
+
           <div className="mt-5 min-w-0">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Video Description
@@ -387,7 +360,13 @@ search volume data, ranking positions, or guarantees.
 
             <textarea
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                setDescription(e.target.value);
+
+                if (error) {
+                  setError("");
+                }
+              }}
               placeholder="Paste your YouTube video description here..."
               rows={7}
               className="box-border w-full min-w-0 resize-none rounded-xl border border-white/10 bg-[#0B1220] px-4 py-3 text-sm leading-6 text-white outline-none transition focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/30 placeholder:text-slate-600"
@@ -400,6 +379,7 @@ search volume data, ranking positions, or guarantees.
           </div>
 
           {/* Keywords */}
+
           <div className="mt-5 min-w-0">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Keywords
@@ -407,13 +387,20 @@ search volume data, ranking positions, or guarantees.
 
             <input
               value={keywords}
-              onChange={(e) => setKeywords(e.target.value)}
+              onChange={(e) => {
+                setKeywords(e.target.value);
+
+                if (error) {
+                  setError("");
+                }
+              }}
               placeholder="e.g. AI tools, YouTube AI, AI tools for creators"
               className="box-border w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-4 py-3 text-sm text-white outline-none transition focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/30 placeholder:text-slate-600"
             />
           </div>
 
           {/* Language */}
+
           <div className="mt-5 min-w-0">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Language
@@ -433,6 +420,7 @@ search volume data, ranking positions, or guarantees.
           </div>
 
           {/* Category */}
+
           <div className="mt-5 min-w-0">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Category
@@ -451,7 +439,17 @@ search volume data, ranking positions, or guarantees.
             </select>
           </div>
 
+          {/* Credit Info */}
+
+          <div className="mt-5 rounded-xl border border-blue-500/10 bg-blue-500/[0.04] px-3.5 py-3 text-xs text-slate-400">
+            Each SEO analysis ={" "}
+            <span className="font-semibold text-blue-400">
+              {SEO_CHECKER_CREDIT_COST} credits
+            </span>
+          </div>
+
           {/* Error */}
+
           {error && (
             <div className="mt-5 flex min-w-0 gap-3 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
               <AlertCircle
@@ -466,15 +464,18 @@ search volume data, ranking positions, or guarantees.
           )}
 
           {/* Check Button */}
+
           <button
+            type="button"
             onClick={checkSEO}
             disabled={
               loading ||
               (!title.trim() &&
                 !description.trim() &&
-                !keywords.trim())
+                !keywords.trim()) ||
+              credits < SEO_CHECKER_CREDIT_COST
             }
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:scale-[1.01] hover:shadow-blue-500/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+            className="mt-6 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:scale-[1.01] hover:shadow-blue-500/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
           >
             {loading ? (
               <>
@@ -487,7 +488,7 @@ search volume data, ranking positions, or guarantees.
             ) : (
               <>
                 <Search size={18} />
-                Check SEO
+                Check SEO • {SEO_CHECKER_CREDIT_COST} Credits
               </>
             )}
           </button>
@@ -496,9 +497,13 @@ search volume data, ranking positions, or guarantees.
         {/* =========================================================
             RIGHT - RESULTS
         ========================================================== */}
+
         <div className="min-w-0 rounded-3xl border border-white/10 bg-[#050814] p-4 sm:p-6">
+
           {/* Results Header */}
+
           <div className="mb-6 flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
             <div className="min-w-0">
               <h2 className="text-xl font-bold text-white">
                 SEO Analysis
@@ -511,7 +516,11 @@ search volume data, ranking positions, or guarantees.
 
             {result && (
               <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto">
+
+                {/* Copy Report */}
+
                 <button
+                  type="button"
                   onClick={copyReport}
                   className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-blue-500/30 hover:bg-blue-500/10 hover:text-white sm:flex-none"
                 >
@@ -526,11 +535,17 @@ search volume data, ranking positions, or guarantees.
                   </span>
                 </button>
 
+                {/* Check Again */}
+
                 <button
+                  type="button"
                   onClick={checkSEO}
-                  disabled={loading}
-                  title="Check Again"
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-300 transition hover:border-blue-500/30 hover:bg-blue-500/10 hover:text-white disabled:opacity-50"
+                  disabled={
+                    loading ||
+                    credits < SEO_CHECKER_CREDIT_COST
+                  }
+                  title={`Check Again • ${SEO_CHECKER_CREDIT_COST} Credits`}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-300 transition hover:border-blue-500/30 hover:bg-blue-500/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <RefreshCcw
                     size={16}
@@ -544,8 +559,10 @@ search volume data, ranking positions, or guarantees.
           </div>
 
           {/* Empty State */}
+
           {!result ? (
             <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 px-5 py-12 sm:h-[600px]">
+
               <Search
                 size={42}
                 className="text-blue-400"
@@ -559,15 +576,19 @@ search volume data, ranking positions, or guarantees.
                 Enter your video title, description or
                 keywords and click Check SEO.
               </p>
+
             </div>
           ) : (
             <div className="min-w-0 space-y-5">
-              {/* =====================================================
-                  Overall Score
-              ====================================================== */}
+
+              {/* Overall Score */}
+
               <div className="min-w-0 rounded-2xl border border-white/10 bg-[#0B1220] p-5 sm:p-6">
+
                 <div className="flex min-w-0 flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-between">
+
                   <div className="min-w-0 text-center sm:text-left">
+
                     <p className="text-sm font-medium text-slate-500">
                       Overall SEO Score
                     </p>
@@ -588,7 +609,9 @@ search volume data, ranking positions, or guarantees.
                   </div>
 
                   <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full border-8 border-blue-500/20 bg-blue-500/10 sm:h-28 sm:w-28">
+
                     <div className="text-center">
+
                       <TrendingUp
                         size={22}
                         className="mx-auto text-blue-400"
@@ -597,11 +620,13 @@ search volume data, ranking positions, or guarantees.
                       <span className="mt-1 block text-xs font-semibold text-blue-300">
                         SEO
                       </span>
+
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-6 h-2 overflow-hidden rounded-full bg-white/5">
+
                   <div
                     className={`h-full rounded-full transition-all duration-700 ${getScoreBarClass(
                       result.overallScore
@@ -610,25 +635,31 @@ search volume data, ranking positions, or guarantees.
                       width: `${result.overallScore}%`,
                     }}
                   />
+
                 </div>
               </div>
 
-              {/* =====================================================
-                  Score Cards
-              ====================================================== */}
+              {/* Score Cards */}
+
               <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+
                 {/* Title Score */}
+
                 <div className="min-w-0 rounded-2xl border border-white/10 bg-[#0B1220] p-5">
+
                   <div className="flex min-w-0 items-center justify-between gap-3">
+
                     <div className="flex min-w-0 items-center gap-3">
+
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10">
-                        <Sparkles
+                        <Search
                           size={19}
                           className="text-blue-400"
                         />
                       </div>
 
                       <div className="min-w-0">
+
                         <p className="truncate text-sm font-semibold text-white">
                           Title SEO
                         </p>
@@ -636,15 +667,18 @@ search volume data, ranking positions, or guarantees.
                         <p className="truncate text-xs text-slate-600">
                           Title optimization
                         </p>
+
                       </div>
                     </div>
 
                     <span className="shrink-0 text-lg font-bold text-blue-400">
                       {result.titleScore}
                     </span>
+
                   </div>
 
                   <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/5">
+
                     <div
                       className={`h-full rounded-full ${getScoreBarClass(
                         result.titleScore
@@ -653,13 +687,18 @@ search volume data, ranking positions, or guarantees.
                         width: `${result.titleScore}%`,
                       }}
                     />
+
                   </div>
                 </div>
 
                 {/* Description Score */}
+
                 <div className="min-w-0 rounded-2xl border border-white/10 bg-[#0B1220] p-5">
+
                   <div className="flex min-w-0 items-center justify-between gap-3">
+
                     <div className="flex min-w-0 items-center gap-3">
+
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-500/10">
                         <FileText
                           size={19}
@@ -668,6 +707,7 @@ search volume data, ranking positions, or guarantees.
                       </div>
 
                       <div className="min-w-0">
+
                         <p className="truncate text-sm font-semibold text-white">
                           Description SEO
                         </p>
@@ -675,15 +715,18 @@ search volume data, ranking positions, or guarantees.
                         <p className="truncate text-xs text-slate-600">
                           Description optimization
                         </p>
+
                       </div>
                     </div>
 
                     <span className="shrink-0 text-lg font-bold text-purple-400">
                       {result.descriptionScore}
                     </span>
+
                   </div>
 
                   <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/5">
+
                     <div
                       className={`h-full rounded-full ${getScoreBarClass(
                         result.descriptionScore
@@ -692,13 +735,18 @@ search volume data, ranking positions, or guarantees.
                         width: `${result.descriptionScore}%`,
                       }}
                     />
+
                   </div>
                 </div>
 
                 {/* Keyword Score */}
+
                 <div className="min-w-0 rounded-2xl border border-white/10 bg-[#0B1220] p-5">
+
                   <div className="flex min-w-0 items-center justify-between gap-3">
+
                     <div className="flex min-w-0 items-center gap-3">
+
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10">
                         <Target
                           size={19}
@@ -707,6 +755,7 @@ search volume data, ranking positions, or guarantees.
                       </div>
 
                       <div className="min-w-0">
+
                         <p className="truncate text-sm font-semibold text-white">
                           Keyword Optimization
                         </p>
@@ -714,15 +763,18 @@ search volume data, ranking positions, or guarantees.
                         <p className="truncate text-xs text-slate-600">
                           Keyword relevance
                         </p>
+
                       </div>
                     </div>
 
                     <span className="shrink-0 text-lg font-bold text-emerald-400">
                       {result.keywordScore}
                     </span>
+
                   </div>
 
                   <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/5">
+
                     <div
                       className={`h-full rounded-full ${getScoreBarClass(
                         result.keywordScore
@@ -731,13 +783,18 @@ search volume data, ranking positions, or guarantees.
                         width: `${result.keywordScore}%`,
                       }}
                     />
+
                   </div>
                 </div>
 
                 {/* Search Intent */}
+
                 <div className="min-w-0 rounded-2xl border border-white/10 bg-[#0B1220] p-5">
+
                   <div className="flex min-w-0 items-center justify-between gap-3">
+
                     <div className="flex min-w-0 items-center gap-3">
+
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/10">
                         <Search
                           size={19}
@@ -746,6 +803,7 @@ search volume data, ranking positions, or guarantees.
                       </div>
 
                       <div className="min-w-0">
+
                         <p className="truncate text-sm font-semibold text-white">
                           Search Intent
                         </p>
@@ -753,15 +811,18 @@ search volume data, ranking positions, or guarantees.
                         <p className="truncate text-xs text-slate-600">
                           Query alignment
                         </p>
+
                       </div>
                     </div>
 
                     <span className="shrink-0 text-lg font-bold text-cyan-400">
                       {result.searchIntentScore}
                     </span>
+
                   </div>
 
                   <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/5">
+
                     <div
                       className={`h-full rounded-full ${getScoreBarClass(
                         result.searchIntentScore
@@ -770,13 +831,18 @@ search volume data, ranking positions, or guarantees.
                         width: `${result.searchIntentScore}%`,
                       }}
                     />
+
                   </div>
                 </div>
 
                 {/* Readability */}
+
                 <div className="min-w-0 rounded-2xl border border-white/10 bg-[#0B1220] p-5 sm:col-span-2">
+
                   <div className="flex min-w-0 items-center justify-between gap-3">
+
                     <div className="flex min-w-0 items-center gap-3">
+
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10">
                         <BarChart3
                           size={19}
@@ -785,6 +851,7 @@ search volume data, ranking positions, or guarantees.
                       </div>
 
                       <div className="min-w-0">
+
                         <p className="truncate text-sm font-semibold text-white">
                           Readability
                         </p>
@@ -792,15 +859,18 @@ search volume data, ranking positions, or guarantees.
                         <p className="truncate text-xs text-slate-600">
                           Clarity and easy scanning
                         </p>
+
                       </div>
                     </div>
 
                     <span className="shrink-0 text-lg font-bold text-amber-400">
                       {result.readabilityScore}
                     </span>
+
                   </div>
 
                   <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/5">
+
                     <div
                       className={`h-full rounded-full ${getScoreBarClass(
                         result.readabilityScore
@@ -809,15 +879,17 @@ search volume data, ranking positions, or guarantees.
                         width: `${result.readabilityScore}%`,
                       }}
                     />
+
                   </div>
                 </div>
               </div>
 
-              {/* =====================================================
-                  Strengths
-              ====================================================== */}
+              {/* Strengths */}
+
               <div className="min-w-0 rounded-2xl border border-white/10 bg-[#0B1220] p-5 sm:p-6">
+
                 <div className="flex min-w-0 items-center gap-3">
+
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10">
                     <Check
                       size={20}
@@ -826,6 +898,7 @@ search volume data, ranking positions, or guarantees.
                   </div>
 
                   <div className="min-w-0">
+
                     <h3 className="text-lg font-bold text-white">
                       SEO Strengths
                     </h3>
@@ -833,16 +906,19 @@ search volume data, ranking positions, or guarantees.
                     <p className="text-xs text-slate-600">
                       What is already working well
                     </p>
+
                   </div>
                 </div>
 
                 <div className="mt-5 space-y-3">
+
                   {result.strengths.length > 0 ? (
                     result.strengths.map((item, index) => (
                       <div
                         key={`${index}-${item}`}
                         className="flex min-w-0 gap-3 rounded-xl border border-emerald-500/10 bg-emerald-500/5 px-4 py-3"
                       >
+
                         <Check
                           size={17}
                           className="mt-0.5 shrink-0 text-emerald-400"
@@ -851,6 +927,7 @@ search volume data, ranking positions, or guarantees.
                         <p className="min-w-0 break-words text-sm leading-6 text-slate-300">
                           {item}
                         </p>
+
                       </div>
                     ))
                   ) : (
@@ -858,14 +935,16 @@ search volume data, ranking positions, or guarantees.
                       No specific strengths were returned.
                     </p>
                   )}
+
                 </div>
               </div>
 
-              {/* =====================================================
-                  Improvements
-              ====================================================== */}
+              {/* Improvements */}
+
               <div className="min-w-0 rounded-2xl border border-white/10 bg-[#0B1220] p-5 sm:p-6">
+
                 <div className="flex min-w-0 items-center gap-3">
+
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10">
                     <AlertCircle
                       size={20}
@@ -874,6 +953,7 @@ search volume data, ranking positions, or guarantees.
                   </div>
 
                   <div className="min-w-0">
+
                     <h3 className="text-lg font-bold text-white">
                       Areas to Improve
                     </h3>
@@ -881,16 +961,19 @@ search volume data, ranking positions, or guarantees.
                     <p className="text-xs text-slate-600">
                       SEO issues worth improving
                     </p>
+
                   </div>
                 </div>
 
                 <div className="mt-5 space-y-3">
+
                   {result.improvements.length > 0 ? (
                     result.improvements.map((item, index) => (
                       <div
                         key={`${index}-${item}`}
                         className="flex min-w-0 gap-3 rounded-xl border border-amber-500/10 bg-amber-500/5 px-4 py-3"
                       >
+
                         <AlertCircle
                           size={17}
                           className="mt-0.5 shrink-0 text-amber-400"
@@ -899,6 +982,7 @@ search volume data, ranking positions, or guarantees.
                         <p className="min-w-0 break-words text-sm leading-6 text-slate-300">
                           {item}
                         </p>
+
                       </div>
                     ))
                   ) : (
@@ -906,14 +990,16 @@ search volume data, ranking positions, or guarantees.
                       No specific improvements were returned.
                     </p>
                   )}
+
                 </div>
               </div>
 
-              {/* =====================================================
-                  Recommendations
-              ====================================================== */}
+              {/* Recommendations */}
+
               <div className="min-w-0 rounded-2xl border border-white/10 bg-[#0B1220] p-5 sm:p-6">
+
                 <div className="flex min-w-0 items-center gap-3">
+
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10">
                     <TrendingUp
                       size={20}
@@ -922,6 +1008,7 @@ search volume data, ranking positions, or guarantees.
                   </div>
 
                   <div className="min-w-0">
+
                     <h3 className="text-lg font-bold text-white">
                       SEO Recommendations
                     </h3>
@@ -929,16 +1016,19 @@ search volume data, ranking positions, or guarantees.
                     <p className="text-xs text-slate-600">
                       Practical ways to improve your content
                     </p>
+
                   </div>
                 </div>
 
                 <div className="mt-5 space-y-3">
+
                   {result.recommendations.length > 0 ? (
                     result.recommendations.map((item, index) => (
                       <div
                         key={`${index}-${item}`}
                         className="flex min-w-0 gap-4 rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3"
                       >
+
                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-xs font-bold text-blue-400">
                           {index + 1}
                         </div>
@@ -946,6 +1036,7 @@ search volume data, ranking positions, or guarantees.
                         <p className="min-w-0 break-words text-sm leading-6 text-slate-300">
                           {item}
                         </p>
+
                       </div>
                     ))
                   ) : (
@@ -953,12 +1044,14 @@ search volume data, ranking positions, or guarantees.
                       No recommendations were returned.
                     </p>
                   )}
+
                 </div>
               </div>
             </div>
           )}
 
           {/* Disclaimer */}
+
           {result && (
             <p className="mt-5 px-2 text-center text-xs leading-5 text-slate-600">
               SEO scores are AI estimates based on the provided

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Wand2,
   Copy,
@@ -13,15 +13,20 @@ import {
   TrendingUp,
 } from "lucide-react";
 import ToolLayout from "@/components/ai-tools/ToolLayout";
+import {
+  buildUploadTimePrompt,
+  type UploadTimePromptOptions,
+} from "@/lib/prompts/uploadTime";
 
 type UploadTimeResult = {
   day: string;
   time: string;
   timezone: string;
   score: number;
-  audience: number;
-  engagement: number;
+  audienceActivity: number;
+  competition: number;
   reason: string;
+  recommendation: string;
   favorite: boolean;
 };
 
@@ -76,84 +81,194 @@ const timezones = [
 
 const uploadCounts = ["5", "7", "10"];
 
-export default function BestUploadTimePage() {
-  const [topic, setTopic] = useState("");
-  const [language, setLanguage] = useState("🌐 Auto Detect");
-  const [category, setCategory] = useState("General");
-  const [audience, setAudience] = useState("Everyone");
-  const [timezone, setTimezone] = useState("Auto Detect");
-  const [uploadCount, setUploadCount] = useState("7");
-  const [creativity, setCreativity] = useState(60);
+const REGENERATE_CREDIT_COST = 2;
 
-  const [results, setResults] = useState<UploadTimeResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+// ============================================================
+// CREDIT COST
+// Must match lib/billing/credits.ts
+// ============================================================
+
+const getUploadTimeCreditCost = (count: string): number => {
+  switch (count) {
+    case "5":
+      return 2;
+
+    case "7":
+      return 3;
+
+    case "10":
+      return 5;
+
+    default:
+      return 3;
+  }
+};
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+const clampScore = (value: unknown): number => {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(number)));
+};
+
+const normalizeRecommendation = (
+  day: string,
+  time: string,
+  timezone: string
+): string => {
+  return `${day}|${time}|${timezone}`
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+// ============================================================
+// PAGE
+// ============================================================
+
+export default function BestUploadTimePage() {
+  // ============================================================
+  // FORM STATE
+  // ============================================================
+
+  const [topic, setTopic] = useState("");
+
+  const [language, setLanguage] =
+    useState("🌐 Auto Detect");
+
+  const [category, setCategory] =
+    useState("General");
+
+  const [audience, setAudience] =
+    useState("Everyone");
+
+  const [timezone, setTimezone] =
+    useState("Auto Detect");
+
+  const [uploadCount, setUploadCount] =
+    useState("7");
+
+  const [creativity, setCreativity] =
+    useState(60);
+
+  // ============================================================
+  // CREDIT STATE
+  // ============================================================
+
+  const [credits, setCredits] = useState(0);
+
+  // ============================================================
+  // RESULT STATE
+  // ============================================================
+
+  const [results, setResults] =
+    useState<UploadTimeResult[]>([]);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [regeneratingIndex, setRegeneratingIndex] =
+    useState<number | null>(null);
+
+  const [copiedIndex, setCopiedIndex] =
+    useState<number | null>(null);
+
+  const [error, setError] = useState("");
+
+  // ============================================================
+  // CURRENT GENERATION COST
+  // ============================================================
+
+  const generationCreditCost =
+    getUploadTimeCreditCost(uploadCount);
+
+  // ============================================================
+  // LOAD CREDITS
+  // ============================================================
+
+  useEffect(() => {
+    const loadCredits = async () => {
+      try {
+        const response = await fetch("/api/credits", {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data?.success) {
+          setCredits(Number(data.credits ?? 0));
+        }
+      } catch (error) {
+        console.error(
+          "Failed to load credits:",
+          error
+        );
+      }
+    };
+
+    loadCredits();
+  }, []);
+
+  // ============================================================
+  // UPDATE CREDITS FROM API RESPONSE
+  // ============================================================
+
+  const updateCreditsFromResponse = (
+    data: any
+  ) => {
+    if (
+      typeof data?.credits === "number" &&
+      Number.isFinite(data.credits)
+    ) {
+      setCredits(data.credits);
+    }
+  };
+
+  // ============================================================
+  // GENERATE UPLOAD TIMES
+  // ============================================================
 
   const generateUploadTimes = async () => {
-    if (!topic.trim() || loading) return;
+    if (!topic.trim() || loading) {
+      return;
+    }
+
+    if (credits < generationCreditCost) {
+      setError(
+        `You need ${generationCreditCost} credits to generate ${uploadCount} upload time recommendations, but you only have ${credits}.`
+      );
+      return;
+    }
 
     setLoading(true);
+    setError("");
+    setCopiedIndex(null);
+    setResults([]);
 
     try {
-      const prompt = `
-You are an expert YouTube content strategy assistant.
+      const count = Number(uploadCount);
 
-Analyze the following YouTube content information and generate exactly ${uploadCount} recommended upload time slots.
+      const promptOptions: UploadTimePromptOptions = {
+        topic,
+        category,
+        audience,
+        language,
+        timezone,
+        count,
+      };
 
-Topic:
-${topic}
-
-Language:
-${language}
-
-Category:
-${category}
-
-Target Audience:
-${audience}
-
-Timezone:
-${timezone}
-
-Creativity:
-${creativity}/100
-
-Requirements:
-- Generate exactly ${uploadCount} unique upload time recommendations.
-- Include different days and useful time slots.
-- Recommend realistic YouTube publishing times based on audience behavior and content category.
-- Consider when the target audience is most likely to be available.
-- If timezone is Auto Detect, use a sensible timezone based on the topic/language/context. Prefer Asia/Dhaka when the context strongly suggests Bangladesh.
-- Use 12-hour time format such as "7:30 PM".
-- The timezone field must clearly state the timezone used.
-- Do not claim access to the user's actual YouTube Analytics.
-- Do not claim these are guaranteed best times.
-- These are AI estimates based on general audience behavior.
-- Give a short practical reason for each recommendation.
-- Avoid duplicate day/time combinations.
-- Higher score means a stronger AI-estimated upload opportunity.
-
-Return ONLY valid JSON in exactly this structure:
-
-{
-  "results": [
-    {
-      "day": "Monday",
-      "time": "7:30 PM",
-      "timezone": "Asia/Dhaka",
-      "score": 95,
-      "audience": 92,
-      "engagement": 94,
-      "reason": "Evening viewers are more likely to be available after work and study."
-    }
-  ]
-}
-
-Scoring:
-- score: overall upload opportunity from 70 to 99
-- audience: estimated audience availability from 70 to 99
-- engagement: estimated engagement potential from 70 to 99
-`;
+      const prompt =
+        buildUploadTimePrompt(
+          promptOptions
+        );
 
       const response = await fetch("/api/ai", {
         method: "POST",
@@ -163,6 +278,9 @@ Scoring:
         body: JSON.stringify({
           prompt,
           json: true,
+          toolId: "best-upload-time",
+          count,
+          action: "generate",
         }),
       });
 
@@ -170,77 +288,191 @@ Scoring:
 
       if (!response.ok || !data?.success) {
         throw new Error(
-          data?.error || "Upload time generation failed."
+          data?.error ||
+            "Upload time generation failed."
         );
       }
 
-      const parsed =
-        typeof data.result === "string"
-          ? JSON.parse(data.result)
-          : data.result;
+      // Server is authoritative for credits.
+      updateCreditsFromResponse(data);
 
-      const rawResults = Array.isArray(parsed?.results)
+      let parsed: any;
+
+      try {
+        parsed =
+          typeof data.result === "string"
+            ? JSON.parse(data.result)
+            : data.result;
+      } catch {
+        throw new Error(
+          "AI returned invalid JSON. Please try again."
+        );
+      }
+
+      const rawResults = Array.isArray(
+        parsed?.results
+      )
         ? parsed.results
         : [];
 
-      const uploadTimes: UploadTimeResult[] = rawResults
-        .slice(0, Number(uploadCount))
-        .map((item: any) => ({
-          day: String(item?.day || "").trim(),
-          time: String(item?.time || "").trim(),
-          timezone: String(
-            item?.timezone || timezone || "Auto Detect"
-          ).trim(),
-          score: Math.max(
-            0,
-            Math.min(100, Number(item?.score) || 0)
-          ),
-          audience: Math.max(
-            0,
-            Math.min(100, Number(item?.audience) || 0)
-          ),
-          engagement: Math.max(
-            0,
-            Math.min(100, Number(item?.engagement) || 0)
-          ),
-          reason: String(item?.reason || "").trim(),
-          favorite: false,
-        }))
-        .filter(
-          (item: UploadTimeResult) =>
-            item.day.length > 0 && item.time.length > 0
-        )
-        .sort(
-          (a: UploadTimeResult, b: UploadTimeResult) =>
-            b.score - a.score
-        );
+      const seen = new Set<string>();
 
+      const uploadTimes: UploadTimeResult[] =
+        rawResults
+          .map((item: any) => {
+            const day = String(
+              item?.day ?? ""
+            ).trim();
+
+            const time = String(
+              item?.time ?? ""
+            ).trim();
+
+            const resultTimezone = String(
+              item?.timezone ??
+                timezone ??
+                "Auto Detect"
+            ).trim();
+
+            return {
+              day,
+              time,
+              timezone: resultTimezone,
+
+              score: clampScore(
+                item?.score
+              ),
+
+              audienceActivity: clampScore(
+                item?.audienceActivity
+              ),
+
+              competition: clampScore(
+                item?.competition
+              ),
+
+              reason: String(
+                item?.reason ?? ""
+              ).trim(),
+
+              recommendation: String(
+                item?.recommendation ?? ""
+              ).trim(),
+
+              favorite: false,
+            };
+          })
+          .filter(
+            (item: UploadTimeResult) => {
+              if (
+                !item.day ||
+                !item.time
+              ) {
+                return false;
+              }
+
+              const normalized =
+                normalizeRecommendation(
+                  item.day,
+                  item.time,
+                  item.timezone
+                );
+
+              if (seen.has(normalized)) {
+                return false;
+              }
+
+              seen.add(normalized);
+
+              return true;
+            }
+          )
+          .slice(0, count)
+          .sort(
+            (
+              a: UploadTimeResult,
+              b: UploadTimeResult
+            ) => b.score - a.score
+          );
+
+      if (!uploadTimes.length) {
+        throw new Error(
+          "No upload time recommendations were returned. Please try again."
+        );
+      }
+
+      if (uploadTimes.length < count) {
+        throw new Error(
+          `AI returned only ${uploadTimes.length} unique recommendations instead of ${count}. Please try again.`
+        );
+      }
+
+      // Replace results only after successful generation.
       setResults(uploadTimes);
     } catch (error: any) {
-      console.error("Best Upload Time Error:", error);
-      alert(
-        error?.message || "Failed to generate upload times."
+      console.error(
+        "Best Upload Time Error:",
+        error
+      );
+
+      setError(
+        error?.message ||
+          "Failed to generate upload times. Please try again."
       );
     } finally {
       setLoading(false);
     }
   };
 
-  const regenerateUploadTime = async (index: number) => {
-    if (loading) return;
+  // ============================================================
+  // REGENERATE SINGLE UPLOAD TIME
+  // Cost = 2 Credits
+  // ============================================================
+
+  const regenerateUploadTime = async (
+    index: number
+  ) => {
+    if (
+      loading ||
+      regeneratingIndex !== null
+    ) {
+      return;
+    }
 
     const current = results[index];
 
-    if (!current) return;
+    if (!current) {
+      return;
+    }
 
-    setLoading(true);
+    if (
+      credits <
+      REGENERATE_CREDIT_COST
+    ) {
+      setError(
+        `You need ${REGENERATE_CREDIT_COST} credits to regenerate an upload time, but you only have ${credits}.`
+      );
+      return;
+    }
+
+    setRegeneratingIndex(index);
+    setError("");
+    setCopiedIndex(null);
 
     try {
+      const existingRecommendations =
+        results
+          .map(
+            (item) =>
+              `${item.day} at ${item.time} (${item.timezone})`
+          )
+          .join(", ");
+
       const prompt = `
 Generate ONE alternative YouTube upload time recommendation.
 
 Topic:
-${topic}
+${topic.trim()}
 
 Language:
 ${language}
@@ -255,29 +487,46 @@ Timezone:
 ${timezone}
 
 Current Recommendation:
-${current.day} at ${current.time}
+${current.day} at ${current.time} (${current.timezone})
+
+Other Existing Recommendations:
+${existingRecommendations}
 
 Requirements:
-- Generate one different day/time combination.
-- Do not repeat the current recommendation.
-- Use a realistic YouTube publishing time.
-- Consider target audience and category.
-- Use 12-hour time format.
-- Clearly state the timezone.
-- Scores are AI estimates only.
-- Do not claim access to actual YouTube Analytics.
-- Do not guarantee performance.
 
-Return ONLY valid JSON:
+1. Generate exactly ONE alternative recommendation.
+2. The new day/time combination MUST be different from the current recommendation.
+3. Do not duplicate any existing recommendation.
+4. Use a realistic YouTube publishing time.
+5. Consider the target audience.
+6. Consider the content category.
+7. Use 12-hour time format.
+8. Clearly state the timezone.
+9. Scores are AI estimates only.
+10. Do not claim access to actual YouTube Analytics.
+11. Do not guarantee performance.
+12. score must be a JSON number from 70 to 99.
+13. audienceActivity must be a JSON number from 70 to 99.
+14. competition must be a JSON number from 1 to 100.
+15. reason must be a string.
+16. recommendation must be a string.
+17. Do not add extra fields.
+18. Do not use markdown.
+19. Do not add explanations outside JSON.
+
+Return ONLY valid JSON.
+
+Use exactly this structure:
 
 {
   "day": "Thursday",
   "time": "8:00 PM",
   "timezone": "Asia/Dhaka",
   "score": 94,
-  "audience": 91,
-  "engagement": 93,
-  "reason": "Evening viewers are generally more available for entertainment and educational content."
+  "audienceActivity": 91,
+  "competition": 55,
+  "reason": "Evening viewers are generally more available for this type of content.",
+  "recommendation": "A strong estimated publishing window for the target audience."
 }
 `;
 
@@ -289,6 +538,9 @@ Return ONLY valid JSON:
         body: JSON.stringify({
           prompt,
           json: true,
+          toolId: "best-upload-time",
+          count: 1,
+          action: "regenerate",
         }),
       });
 
@@ -296,51 +548,121 @@ Return ONLY valid JSON:
 
       if (!response.ok || !data?.success) {
         throw new Error(
-          data?.error || "Regeneration failed."
+          data?.error ||
+            "Regeneration failed."
         );
       }
 
-      const parsed =
-        typeof data.result === "string"
-          ? JSON.parse(data.result)
-          : data.result;
+      // Server is authoritative for credits.
+      updateCreditsFromResponse(data);
+
+      let parsed: any;
+
+      try {
+        parsed =
+          typeof data.result === "string"
+            ? JSON.parse(data.result)
+            : data.result;
+      } catch {
+        throw new Error(
+          "AI returned invalid JSON. Please try again."
+        );
+      }
 
       const newResult: UploadTimeResult = {
-        day: String(parsed?.day || "").trim(),
-        time: String(parsed?.time || "").trim(),
-        timezone: String(
-          parsed?.timezone || timezone || "Auto Detect"
+        day: String(
+          parsed?.day ?? ""
         ).trim(),
-        score: Math.max(
-          0,
-          Math.min(100, Number(parsed?.score) || 0)
+
+        time: String(
+          parsed?.time ?? ""
+        ).trim(),
+
+        timezone: String(
+          parsed?.timezone ??
+            timezone ??
+            "Auto Detect"
+        ).trim(),
+
+        score: clampScore(
+          parsed?.score
         ),
-        audience: Math.max(
-          0,
-          Math.min(100, Number(parsed?.audience) || 0)
+
+        audienceActivity: clampScore(
+          parsed?.audienceActivity
         ),
-        engagement: Math.max(
-          0,
-          Math.min(100, Number(parsed?.engagement) || 0)
+
+        competition: clampScore(
+          parsed?.competition
         ),
-        reason: String(parsed?.reason || "").trim(),
+
+        reason: String(
+          parsed?.reason ?? ""
+        ).trim(),
+
+        recommendation: String(
+          parsed?.recommendation ?? ""
+        ).trim(),
+
         favorite: current.favorite,
       };
 
-      if (!newResult.day || !newResult.time) {
+      if (
+        !newResult.day ||
+        !newResult.time
+      ) {
         throw new Error(
           "AI returned an invalid upload time. Please try again."
         );
       }
 
-      setResults((currentResults) => {
-        const updated = currentResults.map((item, i) =>
-          i === index ? newResult : item
+      const normalizedNew =
+        normalizeRecommendation(
+          newResult.day,
+          newResult.time,
+          newResult.timezone
         );
 
-        return updated.sort(
-          (a: UploadTimeResult, b: UploadTimeResult) =>
-            b.score - a.score
+      const duplicate = results.some(
+        (item, i) => {
+          if (i === index) {
+            return false;
+          }
+
+          const normalizedExisting =
+            normalizeRecommendation(
+              item.day,
+              item.time,
+              item.timezone
+            );
+
+          return (
+            normalizedExisting ===
+            normalizedNew
+          );
+        }
+      );
+
+      if (duplicate) {
+        throw new Error(
+          "AI returned an existing upload time. Please try again."
+        );
+      }
+
+      setResults((currentResults) => {
+        const updated =
+          currentResults.map(
+            (item, i) =>
+              i === index
+                ? newResult
+                : item
+          );
+
+        return [...updated].sort(
+          (
+            a: UploadTimeResult,
+            b: UploadTimeResult
+          ) => b.score - a.score
         );
       });
     } catch (error: any) {
@@ -349,26 +671,38 @@ Return ONLY valid JSON:
         error
       );
 
-      alert(
-        error?.message || "Failed to regenerate upload time."
+      setError(
+        error?.message ||
+          "Failed to regenerate upload time. Please try again."
       );
     } finally {
-      setLoading(false);
+      setRegeneratingIndex(null);
     }
   };
 
-  const toggleFavorite = (index: number) => {
+  // ============================================================
+  // FAVORITE
+  // ============================================================
+
+  const toggleFavorite = (
+    index: number
+  ) => {
     setResults((current) =>
       current.map((item, i) =>
         i === index
           ? {
               ...item,
-              favorite: !item.favorite,
+              favorite:
+                !item.favorite,
             }
           : item
       )
     );
   };
+
+  // ============================================================
+  // COPY SINGLE RESULT
+  // ============================================================
 
   const copyResult = async (
     item: UploadTimeResult,
@@ -376,47 +710,97 @@ Return ONLY valid JSON:
   ) => {
     const text = `${item.day} — ${item.time} (${item.timezone})
 Score: ${item.score}
-Audience Availability: ${item.audience}
-Engagement Potential: ${item.engagement}
-Reason: ${item.reason}`;
+Audience Activity: ${item.audienceActivity}
+Competition: ${item.competition}
+Reason: ${item.reason}
+Recommendation: ${item.recommendation}`;
 
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(
+        text
+      );
 
       setCopiedIndex(index);
+      setError("");
 
       setTimeout(() => {
-        setCopiedIndex(null);
-      }, 2000);
+        setCopiedIndex((current) =>
+          current === index
+            ? null
+            : current
+        );
+      }, 1800);
     } catch (error) {
-      console.error("Copy failed:", error);
+      console.error(
+        "Copy failed:",
+        error
+      );
+
+      setError(
+        "Failed to copy recommendation."
+      );
     }
   };
 
+  // ============================================================
+  // COPY ALL RESULTS
+  // ============================================================
+
   const copyAllResults = async () => {
-    if (!results.length) return;
+    if (!results.length) {
+      return;
+    }
 
     const text = results
       .map(
         (item, index) =>
           `${index + 1}. ${item.day} — ${item.time} (${item.timezone})
 Score: ${item.score}
-Audience Availability: ${item.audience}
-Engagement Potential: ${item.engagement}
-Reason: ${item.reason}`
+Audience Activity: ${item.audienceActivity}
+Competition: ${item.competition}
+Reason: ${item.reason}
+Recommendation: ${item.recommendation}`
       )
       .join("\n\n");
 
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(
+        text
+      );
 
-      alert("All upload times copied!");
+      setCopiedIndex(-1);
+      setError("");
+
+      setTimeout(() => {
+        setCopiedIndex((current) =>
+          current === -1
+            ? null
+            : current
+        );
+      }, 1800);
     } catch (error) {
-      console.error("Copy all failed:", error);
+      console.error(
+        "Copy all failed:",
+        error
+      );
+
+      setError(
+        "Failed to copy upload times."
+      );
     }
   };
 
-  const bestIndex = results.length > 0 ? 0 : -1;
+  // ============================================================
+  // BEST RESULT
+  // Results are already sorted by score.
+  // ============================================================
+
+  const bestIndex =
+    results.length > 0 ? 0 : -1;
+
+  // ============================================================
+  // UI
+  // ============================================================
 
   return (
     <ToolLayout
@@ -424,13 +808,27 @@ Reason: ${item.reason}`
       description="Find the best estimated YouTube upload times for your audience powered by AI."
     >
       <div className="grid min-w-0 gap-5 sm:gap-6 lg:gap-8 xl:grid-cols-[420px_minmax(0,1fr)]">
-        {/* LEFT SIDE */}
+
+        {/* ======================================================
+            LEFT SIDE
+        ====================================================== */}
+
         <div className="min-w-0 rounded-2xl border border-white/10 bg-[#050814] p-4 sm:rounded-3xl sm:p-6">
-          <h2 className="mb-5 text-lg font-bold text-white sm:mb-6 sm:text-xl">
-            Upload Time Analyzer
-          </h2>
+
+          {/* Header */}
+
+          <div className="mb-5 flex items-center justify-between gap-3 sm:mb-6">
+            <h2 className="text-lg font-bold text-white sm:text-xl">
+              Upload Time Analyzer
+            </h2>
+
+            <span className="shrink-0 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-400">
+              {credits} Credits
+            </span>
+          </div>
 
           {/* Topic */}
+
           <div className="mb-5">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Topic
@@ -438,14 +836,21 @@ Reason: ${item.reason}`
 
             <textarea
               value={topic}
-              onChange={(e) => setTopic(e.target.value)}
+              onChange={(e) => {
+                setTopic(e.target.value);
+
+                if (error) {
+                  setError("");
+                }
+              }}
               placeholder="e.g. AI tools for YouTube creators"
               rows={4}
-              className="w-full resize-none rounded-xl border border-white/10 bg-[#0B1220] px-3.5 py-3 text-sm text-white outline-none transition focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 sm:rounded-2xl sm:px-4"
+              className="w-full resize-none rounded-xl border border-white/10 bg-[#0B1220] px-3.5 py-3 text-sm text-white outline-none transition focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 placeholder:text-slate-600 sm:rounded-2xl sm:px-4"
             />
           </div>
 
           {/* Language */}
+
           <div className="mb-5">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Language
@@ -453,18 +858,28 @@ Reason: ${item.reason}`
 
             <select
               value={language}
-              onChange={(e) => setLanguage(e.target.value)}
+              onChange={(e) =>
+                setLanguage(
+                  e.target.value
+                )
+              }
               className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-3.5 py-3 text-sm text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 sm:rounded-2xl sm:px-4"
             >
-              {languages.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
+              {languages.map(
+                (item) => (
+                  <option
+                    key={item}
+                    value={item}
+                  >
+                    {item}
+                  </option>
+                )
+              )}
             </select>
           </div>
 
           {/* Category */}
+
           <div className="mb-5">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Category
@@ -472,18 +887,28 @@ Reason: ${item.reason}`
 
             <select
               value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              onChange={(e) =>
+                setCategory(
+                  e.target.value
+                )
+              }
               className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-3.5 py-3 text-sm text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 sm:rounded-2xl sm:px-4"
             >
-              {categories.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
+              {categories.map(
+                (item) => (
+                  <option
+                    key={item}
+                    value={item}
+                  >
+                    {item}
+                  </option>
+                )
+              )}
             </select>
           </div>
 
           {/* Audience */}
+
           <div className="mb-5">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Target Audience
@@ -491,18 +916,28 @@ Reason: ${item.reason}`
 
             <select
               value={audience}
-              onChange={(e) => setAudience(e.target.value)}
+              onChange={(e) =>
+                setAudience(
+                  e.target.value
+                )
+              }
               className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-3.5 py-3 text-sm text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 sm:rounded-2xl sm:px-4"
             >
-              {audiences.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
+              {audiences.map(
+                (item) => (
+                  <option
+                    key={item}
+                    value={item}
+                  >
+                    {item}
+                  </option>
+                )
+              )}
             </select>
           </div>
 
           {/* Timezone */}
+
           <div className="mb-5">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Timezone
@@ -510,18 +945,28 @@ Reason: ${item.reason}`
 
             <select
               value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
+              onChange={(e) =>
+                setTimezone(
+                  e.target.value
+                )
+              }
               className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-3.5 py-3 text-sm text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 sm:rounded-2xl sm:px-4"
             >
-              {timezones.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
+              {timezones.map(
+                (item) => (
+                  <option
+                    key={item}
+                    value={item}
+                  >
+                    {item}
+                  </option>
+                )
+              )}
             </select>
           </div>
 
           {/* Recommendation Count */}
+
           <div className="mb-5">
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Recommendation Count
@@ -529,19 +974,36 @@ Reason: ${item.reason}`
 
             <select
               value={uploadCount}
-              onChange={(e) => setUploadCount(e.target.value)}
+              onChange={(e) => {
+                setUploadCount(
+                  e.target.value
+                );
+
+                if (error) {
+                  setError("");
+                }
+              }}
               className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-3.5 py-3 text-sm text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 sm:rounded-2xl sm:px-4"
             >
-              {uploadCounts.map((item) => (
-                <option key={item} value={item}>
-                  {item} Recommendations
-                </option>
-              ))}
+              {uploadCounts.map(
+                (item) => (
+                  <option
+                    key={item}
+                    value={item}
+                  >
+                    {item} Recommendations •{" "}
+                    {getUploadTimeCreditCost(
+                      item
+                    )} Credits
+                  </option>
+                )
+              )}
             </select>
           </div>
 
           {/* Creativity */}
-          <div className="mb-6">
+
+          <div className="mb-5">
             <div className="mb-2 flex items-center justify-between gap-3">
               <label className="text-sm font-medium text-slate-300">
                 Creativity
@@ -558,17 +1020,58 @@ Reason: ${item.reason}`
               max="100"
               value={creativity}
               onChange={(e) =>
-                setCreativity(Number(e.target.value))
+                setCreativity(
+                  Number(
+                    e.target.value
+                  )
+                )
               }
               className="w-full accent-blue-500"
             />
           </div>
 
+          {/* Credit Info */}
+
+          <div className="mb-5 rounded-xl border border-blue-500/10 bg-blue-500/[0.04] px-3.5 py-3 text-xs leading-5 text-slate-400">
+            {uploadCount} recommendations ={" "}
+            <span className="font-semibold text-blue-400">
+              {generationCreditCost} credits
+            </span>
+
+            <br />
+
+            Single regeneration ={" "}
+            <span className="font-semibold text-blue-400">
+              {REGENERATE_CREDIT_COST} credits
+            </span>
+          </div>
+
+          {/* Error */}
+
+          {error && (
+            <div className="mb-5 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3">
+              <p className="break-words text-xs leading-5 text-red-400">
+                {error}
+              </p>
+            </div>
+          )}
+
           {/* Generate */}
+
           <button
-            onClick={generateUploadTimes}
-            disabled={!topic.trim() || loading}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-3.5 text-sm font-semibold text-white transition hover:from-blue-500 hover:to-purple-500 disabled:cursor-not-allowed disabled:opacity-50 sm:rounded-2xl"
+            type="button"
+            onClick={
+              generateUploadTimes
+            }
+            disabled={
+              !topic.trim() ||
+              loading ||
+              regeneratingIndex !==
+                null ||
+              credits <
+                generationCreditCost
+            }
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-3.5 text-sm font-semibold text-white transition hover:from-blue-500 hover:to-purple-500 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 sm:rounded-2xl"
           >
             {loading ? (
               <>
@@ -576,53 +1079,89 @@ Reason: ${item.reason}`
                   size={18}
                   className="animate-spin"
                 />
+
                 Analyzing...
               </>
             ) : (
               <>
                 <Wand2 size={18} />
-                Find Best Times
+
+                Find Best Times •{" "}
+                {generationCreditCost} Credits
               </>
             )}
           </button>
         </div>
 
-        {/* RIGHT SIDE */}
+        {/* ======================================================
+            RIGHT SIDE
+        ====================================================== */}
+
         <div className="min-w-0 rounded-2xl border border-white/10 bg-[#050814] p-4 sm:rounded-3xl sm:p-6">
+
           {/* Header */}
+
           <div className="mb-5 flex flex-col gap-4 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
+
             <div className="min-w-0">
               <h2 className="text-lg font-bold text-white sm:text-xl">
                 Recommended Upload Times
               </h2>
 
               <p className="mt-1 text-xs leading-5 text-slate-500 sm:text-sm">
-                AI-estimated publishing opportunities for your
-                audience.
+                AI-estimated publishing opportunities for your audience.
               </p>
             </div>
 
             {results.length > 0 && (
               <div className="flex w-full items-center gap-2 sm:w-auto">
-                <button
-                  onClick={copyAllResults}
-                  className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#0B1220] px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-blue-500/40 hover:text-white sm:flex-none sm:px-4 sm:text-sm"
-                >
-                  <Copy size={15} />
-                  Copy All
-                </button>
+
+                {/* Copy All */}
 
                 <button
-                  onClick={generateUploadTimes}
-                  disabled={loading}
-                  title="Generate Again"
+                  type="button"
+                  onClick={
+                    copyAllResults
+                  }
+                  className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#0B1220] px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-blue-500/40 hover:text-white sm:flex-none sm:px-4 sm:text-sm"
+                >
+                  {copiedIndex ===
+                  -1 ? (
+                    <span className="text-emerald-400">
+                      Copied!
+                    </span>
+                  ) : (
+                    <>
+                      <Copy size={15} />
+                      Copy All
+                    </>
+                  )}
+                </button>
+
+                {/* Generate Again */}
+
+                <button
+                  type="button"
+                  onClick={
+                    generateUploadTimes
+                  }
+                  disabled={
+                    loading ||
+                    regeneratingIndex !==
+                      null ||
+                    credits <
+                      generationCreditCost
+                  }
+                  title={`Generate Again • ${generationCreditCost} Credits`}
                   aria-label="Generate Again"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#0B1220] text-slate-300 transition hover:border-blue-500/40 hover:text-white disabled:opacity-50"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#0B1220] text-slate-300 transition hover:border-blue-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <RefreshCcw
                     size={17}
                     className={
-                      loading ? "animate-spin" : ""
+                      loading
+                        ? "animate-spin"
+                        : ""
                     }
                   />
                 </button>
@@ -630,243 +1169,320 @@ Reason: ${item.reason}`
             )}
           </div>
 
-          {/* Empty State */}
-          {results.length === 0 && !loading && (
-            <div className="flex min-h-[420px] flex-col items-center justify-center px-4 text-center sm:min-h-[520px]">
-              <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 ring-1 ring-blue-500/20 sm:h-16 sm:w-16">
-                <Clock
-                  size={28}
-                  className="text-blue-400 sm:h-[30px] sm:w-[30px]"
-                />
-              </div>
+          {/* Error */}
 
-              <h3 className="text-lg font-semibold text-white sm:text-xl">
-                No Upload Times Yet
-              </h3>
-
-              <p className="mt-2 max-w-md text-xs leading-6 text-slate-500 sm:text-sm">
-                Enter your topic and click Find Best Times
-                to get AI-estimated upload recommendations.
+          {error && results.length > 0 && (
+            <div className="mb-5 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3">
+              <p className="break-words text-xs leading-5 text-red-400">
+                {error}
               </p>
             </div>
           )}
+
+          {/* Empty State */}
+
+          {results.length === 0 &&
+            !loading && (
+              <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 px-4 text-center sm:min-h-[520px]">
+
+                <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 ring-1 ring-blue-500/20 sm:h-16 sm:w-16">
+                  <Clock
+                    size={28}
+                    className="text-blue-400 sm:h-[30px] sm:w-[30px]"
+                  />
+                </div>
+
+                <h3 className="text-lg font-semibold text-white sm:text-xl">
+                  No Upload Times Yet
+                </h3>
+
+                <p className="mt-2 max-w-md text-xs leading-6 text-slate-500 sm:text-sm">
+                  Enter your topic and click Find Best Times to get AI-estimated upload recommendations.
+                </p>
+              </div>
+            )}
 
           {/* Loading */}
-          {loading && results.length === 0 && (
-            <div className="flex min-h-[420px] flex-col items-center justify-center px-4 text-center sm:min-h-[520px]">
-              <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-500/10 ring-1 ring-purple-500/20 sm:h-16 sm:w-16">
-                <Sparkles
-                  size={28}
-                  className="animate-pulse text-purple-400 sm:h-[30px] sm:w-[30px]"
-                />
+
+          {loading &&
+            results.length === 0 && (
+              <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 px-4 text-center sm:min-h-[520px]">
+
+                <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-500/10 ring-1 ring-purple-500/20 sm:h-16 sm:w-16">
+                  <Sparkles
+                    size={28}
+                    className="animate-pulse text-purple-400 sm:h-[30px] sm:w-[30px]"
+                  />
+                </div>
+
+                <h3 className="text-lg font-semibold text-white sm:text-xl">
+                  Analyzing Best Times...
+                </h3>
+
+                <p className="mt-2 max-w-md text-xs leading-6 text-slate-500 sm:text-sm">
+                  AI is analyzing your audience, category, and content topic.
+                </p>
               </div>
-
-              <h3 className="text-lg font-semibold text-white sm:text-xl">
-                Analyzing Best Times...
-              </h3>
-
-              <p className="mt-2 max-w-md text-xs leading-6 text-slate-500 sm:text-sm">
-                AI is analyzing your audience, category, and
-                content topic.
-              </p>
-            </div>
-          )}
+            )}
 
           {/* Results */}
+
           {results.length > 0 && (
             <div className="space-y-4">
-              {results.map((item, index) => {
-                const isBest = index === bestIndex;
 
-                return (
-                  <div
-                    key={`${item.day}-${item.time}-${index}`}
-                    className={`min-w-0 overflow-hidden rounded-2xl border bg-[#0B1220] p-4 transition-all duration-300 sm:p-5 ${
-                      isBest
-                        ? "border-blue-500/50 shadow-lg shadow-blue-500/10"
-                        : "border-white/10 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/10"
-                    }`}
-                  >
-                    {/* Top */}
-                    <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-3 flex flex-wrap items-center gap-2">
-                          {isBest && (
-                            <span className="rounded-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-400 ring-1 ring-blue-500/20 sm:text-[11px]">
-                              BEST
-                            </span>
-                          )}
+              {results.map(
+                (item, index) => {
+                  const isBest =
+                    index === bestIndex;
 
-                          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-medium text-slate-400 sm:text-[11px]">
-                            Recommendation #{index + 1}
-                          </span>
-                        </div>
+                  const isRegenerating =
+                    regeneratingIndex ===
+                    index;
 
-                        {/* Day + Time */}
-                        <div className="flex min-w-0 flex-col items-start gap-3 xs:flex-row xs:flex-wrap xs:items-center">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <CalendarDays
-                              size={19}
-                              className="shrink-0 text-blue-400"
-                            />
+                  return (
+                    <div
+                      key={`${item.day}-${item.time}-${item.timezone}-${index}`}
+                      className={`min-w-0 overflow-hidden rounded-2xl border bg-[#0B1220] p-4 transition-all duration-300 sm:p-5 ${
+                        isBest
+                          ? "border-blue-500/50 shadow-lg shadow-blue-500/10"
+                          : "border-white/10 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/10"
+                      }`}
+                    >
 
-                            <h3 className="break-words text-lg font-bold text-white sm:text-xl">
-                              {item.day}
-                            </h3>
-                          </div>
+                      {/* Top */}
 
-                          <div className="inline-flex max-w-full items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2">
-                            <Clock
-                              size={16}
-                              className="shrink-0 text-blue-400"
-                            />
+                      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 
-                            <span className="break-words text-base font-bold text-blue-400 sm:text-lg">
-                              {item.time}
+                        <div className="min-w-0 flex-1">
+
+                          <div className="mb-3 flex flex-wrap items-center gap-2">
+
+                            {isBest && (
+                              <span className="rounded-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-400 ring-1 ring-blue-500/20 sm:text-[11px]">
+                                BEST
+                              </span>
+                            )}
+
+                            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-medium text-slate-400 sm:text-[11px]">
+                              Recommendation #
+                              {index + 1}
                             </span>
                           </div>
+
+                          {/* Day + Time */}
+
+                          <div className="flex min-w-0 flex-col items-start gap-3 min-[400px]:flex-row min-[400px]:flex-wrap min-[400px]:items-center">
+
+                            <div className="flex min-w-0 items-center gap-2">
+                              <CalendarDays
+                                size={19}
+                                className="shrink-0 text-blue-400"
+                              />
+
+                              <h3 className="break-words text-lg font-bold text-white sm:text-xl">
+                                {item.day}
+                              </h3>
+                            </div>
+
+                            <div className="inline-flex max-w-full items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2">
+                              <Clock
+                                size={16}
+                                className="shrink-0 text-blue-400"
+                              />
+
+                              <span className="break-words text-base font-bold text-blue-400 sm:text-lg">
+                                {item.time}
+                              </span>
+                            </div>
+                          </div>
+
+                          <p className="mt-2 break-words text-[11px] leading-5 text-slate-500 sm:text-xs">
+                            Timezone:{" "}
+                            {item.timezone}
+                          </p>
                         </div>
 
-                        <p className="mt-2 break-words text-[11px] leading-5 text-slate-500 sm:text-xs">
-                          Timezone: {item.timezone}
+                        {/* Actions */}
+
+                        <div className="flex shrink-0 items-center justify-end gap-1">
+
+                          {/* Copy */}
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              copyResult(
+                                item,
+                                index
+                              )
+                            }
+                            title={
+                              copiedIndex ===
+                              index
+                                ? "Copied!"
+                                : "Copy Recommendation"
+                            }
+                            aria-label="Copy Recommendation"
+                            className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/5 hover:text-white"
+                          >
+                            {copiedIndex ===
+                            index ? (
+                              <span className="text-[9px] font-semibold text-emerald-400">
+                                Copied
+                              </span>
+                            ) : (
+                              <Copy
+                                size={17}
+                              />
+                            )}
+                          </button>
+
+                          {/* Favorite */}
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              toggleFavorite(
+                                index
+                              )
+                            }
+                            title={
+                              item.favorite
+                                ? "Remove Favorite"
+                                : "Add Favorite"
+                            }
+                            aria-label={
+                              item.favorite
+                                ? "Remove Favorite"
+                                : "Add Favorite"
+                            }
+                            className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/5 hover:text-pink-400"
+                          >
+                            <Heart
+                              size={17}
+                              className={
+                                item.favorite
+                                  ? "fill-pink-500 text-pink-500"
+                                  : ""
+                              }
+                            />
+                          </button>
+
+                          {/* Regenerate */}
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              regenerateUploadTime(
+                                index
+                              )
+                            }
+                            disabled={
+                              loading ||
+                              regeneratingIndex !==
+                                null ||
+                              credits <
+                                REGENERATE_CREDIT_COST
+                            }
+                            title={`Regenerate Time • ${REGENERATE_CREDIT_COST} Credits`}
+                            aria-label="Regenerate Time"
+                            className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/5 hover:text-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <RefreshCcw
+                              size={17}
+                              className={
+                                isRegenerating
+                                  ? "animate-spin"
+                                  : ""
+                              }
+                            />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Scores */}
+
+                      <div className="mt-5 grid grid-cols-1 gap-3 min-[360px]:grid-cols-3">
+
+                        <div className="min-w-0 rounded-xl border border-white/5 bg-[#070C16] p-3">
+                          <div className="mb-1 flex items-center gap-2 text-xs text-slate-500">
+                            <Sparkles size={13} />
+
+                            <span>
+                              AI Score
+                            </span>
+                          </div>
+
+                          <div className="text-lg font-bold text-blue-400">
+                            {item.score}
+                          </div>
+                        </div>
+
+                        <div className="min-w-0 rounded-xl border border-white/5 bg-[#070C16] p-3">
+                          <div className="mb-1 flex items-center gap-2 text-xs text-slate-500">
+                            <Target size={13} />
+
+                            <span>
+                              Audience Activity
+                            </span>
+                          </div>
+
+                          <div className="text-lg font-bold text-purple-400">
+                            {item.audienceActivity}
+                          </div>
+                        </div>
+
+                        <div className="min-w-0 rounded-xl border border-white/5 bg-[#070C16] p-3">
+                          <div className="mb-1 flex items-center gap-2 text-xs text-slate-500">
+                            <TrendingUp size={13} />
+
+                            <span>
+                              Competition
+                            </span>
+                          </div>
+
+                          <div className="text-lg font-bold text-emerald-400">
+                            {item.competition}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Reason */}
+
+                      <div className="mt-4 min-w-0 rounded-xl border border-white/5 bg-[#070C16] p-3.5 sm:p-4">
+                        <p className="break-words text-xs leading-6 text-slate-400 sm:text-sm">
+                          <span className="font-semibold text-slate-300">
+                            Why this time:
+                          </span>{" "}
+                          {item.reason}
                         </p>
                       </div>
 
-                      {/* Actions */}
-                      <div className="flex shrink-0 items-center justify-end gap-1">
-                        <button
-                          onClick={() =>
-                            copyResult(item, index)
-                          }
-                          title={
-                            copiedIndex === index
-                              ? "Copied!"
-                              : "Copy Recommendation"
-                          }
-                          aria-label={
-                            copiedIndex === index
-                              ? "Copied"
-                              : "Copy Recommendation"
-                          }
-                          className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/5 hover:text-white"
-                        >
-                          {copiedIndex === index ? (
-                            <span className="text-[9px] font-semibold text-emerald-400">
-                              Copied!
-                            </span>
-                          ) : (
-                            <Copy size={17} />
-                          )}
-                        </button>
+                      {/* Recommendation */}
 
-                        <button
-                          onClick={() =>
-                            toggleFavorite(index)
-                          }
-                          title={
-                            item.favorite
-                              ? "Remove Favorite"
-                              : "Add Favorite"
-                          }
-                          aria-label={
-                            item.favorite
-                              ? "Remove Favorite"
-                              : "Add Favorite"
-                          }
-                          className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/5 hover:text-pink-400"
-                        >
-                          <Heart
-                            size={17}
-                            className={
-                              item.favorite
-                                ? "fill-pink-500 text-pink-500"
-                                : ""
-                            }
-                          />
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            regenerateUploadTime(index)
-                          }
-                          disabled={loading}
-                          title="Regenerate Time"
-                          aria-label="Regenerate Time"
-                          className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/5 hover:text-blue-400 disabled:opacity-50"
-                        >
-                          <RefreshCcw
-                            size={17}
-                            className={
-                              loading ? "animate-spin" : ""
-                            }
-                          />
-                        </button>
-                      </div>
+                      {item.recommendation && (
+                        <div className="mt-3 min-w-0 rounded-xl border border-blue-500/10 bg-blue-500/[0.04] p-3.5 sm:p-4">
+                          <p className="break-words text-xs leading-6 text-slate-400 sm:text-sm">
+                            <span className="font-semibold text-blue-400">
+                              Recommendation:
+                            </span>{" "}
+                            {item.recommendation}
+                          </p>
+                        </div>
+                      )}
                     </div>
-
-                    {/* Scores */}
-                    <div className="mt-5 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:grid-cols-3">
-                      <div className="min-w-0 rounded-xl border border-white/5 bg-[#070C16] p-3">
-                        <div className="mb-1 flex items-center gap-2 text-xs text-slate-500">
-                          <Sparkles size={13} />
-                          <span>AI Score</span>
-                        </div>
-
-                        <div className="text-lg font-bold text-blue-400">
-                          {item.score}
-                        </div>
-                      </div>
-
-                      <div className="min-w-0 rounded-xl border border-white/5 bg-[#070C16] p-3">
-                        <div className="mb-1 flex items-center gap-2 text-xs text-slate-500">
-                          <Target size={13} />
-                          <span>Audience</span>
-                        </div>
-
-                        <div className="text-lg font-bold text-purple-400">
-                          {item.audience}
-                        </div>
-                      </div>
-
-                      <div className="min-w-0 rounded-xl border border-white/5 bg-[#070C16] p-3 min-[360px]:col-span-2 sm:col-span-1">
-                        <div className="mb-1 flex items-center gap-2 text-xs text-slate-500">
-                          <TrendingUp size={13} />
-                          <span>Engagement</span>
-                        </div>
-
-                        <div className="text-lg font-bold text-emerald-400">
-                          {item.engagement}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Reason */}
-                    <div className="mt-4 min-w-0 rounded-xl border border-white/5 bg-[#070C16] p-3.5 sm:p-4">
-                      <p className="break-words text-xs leading-6 text-slate-400 sm:text-sm">
-                        <span className="font-semibold text-slate-300">
-                          Why this time:
-                        </span>{" "}
-                        {item.reason}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                }
+              )}
 
               {/* Disclaimer */}
+
               <div className="rounded-2xl border border-yellow-500/10 bg-yellow-500/5 px-4 py-4 sm:px-5">
                 <p className="break-words text-[11px] leading-5 text-slate-500 sm:text-xs">
                   <span className="font-semibold text-yellow-400">
                     Note:
                   </span>{" "}
-                  Upload time scores are AI-generated estimates
-                  based on general audience behavior, content
-                  category, and target audience. They are not
-                  based on your actual YouTube Analytics and do
-                  not guarantee higher views, engagement, or
-                  rankings. For the most accurate timing, compare
-                  these recommendations with your YouTube
-                  Analytics data.
+                  Upload time scores are AI-generated estimates based on general audience behavior, content category, and target audience. They are not based on your actual YouTube Analytics and do not guarantee higher views, engagement, or rankings. For the most accurate timing, compare these recommendations with your YouTube Analytics data.
                 </p>
               </div>
             </div>

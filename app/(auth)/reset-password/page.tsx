@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -12,8 +12,43 @@ export default function ResetPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    const checkRecoverySession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        setErrorMessage(
+          "This password reset link is invalid or has expired. Please request a new one."
+        );
+      }
+
+      setCheckingSession(false);
+    };
+
+    checkRecoverySession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" && session) {
+        setErrorMessage("");
+        setCheckingSession(false);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const handleResetPassword = async () => {
     setErrorMessage("");
@@ -32,6 +67,18 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     const supabase = createClient();
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      setLoading(false);
+      setErrorMessage(
+        "Your password reset session is missing or expired. Please request a new reset link."
+      );
+      return;
+    }
 
     const { error } = await supabase.auth.updateUser({
       password,
@@ -55,10 +102,19 @@ export default function ResetPasswordPage() {
     }, 2000);
   };
 
+  if (checkingSession) {
+    return (
+      <main className="min-h-screen bg-[#050814] flex items-center justify-center px-4">
+        <div className="text-center">
+          <p className="text-gray-300">Checking reset session...</p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#050814] flex items-center justify-center px-4">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur-lg">
-
         <h1 className="text-3xl font-bold text-center text-white">
           Reset Password
         </h1>
@@ -118,7 +174,7 @@ export default function ResetPasswordPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !!errorMessage}
             className="w-full rounded-lg bg-blue-600 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
           >
             {loading ? "Updating..." : "Update Password"}
@@ -133,7 +189,6 @@ export default function ResetPasswordPage() {
             ← Back to Login
           </Link>
         </div>
-
       </div>
     </main>
   );

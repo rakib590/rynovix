@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Wand2,
@@ -12,12 +12,25 @@ import {
 
 import ToolLayout from "@/components/ai-tools/ToolLayout";
 
+import {
+  buildDescriptionPrompt,
+  buildDescriptionRegeneratePrompt,
+} from "@/lib/prompts/description";
+
 type DescriptionResult = {
   description: string;
   score: number;
   ctr: number;
   seo: number;
   favorite: boolean;
+};
+
+type AIDescriptionItem = {
+  description: string;
+  score?: unknown;
+  seo?: unknown;
+  engagement?: unknown;
+  ctr?: unknown;
 };
 
 export default function DescriptionGeneratorPage() {
@@ -30,26 +43,65 @@ export default function DescriptionGeneratorPage() {
 
   const [loading, setLoading] = useState(false);
 
-  const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(
-    null
-  );
+  const [regeneratingIndex, setRegeneratingIndex] =
+    useState<number | null>(null);
 
   const [error, setError] = useState("");
 
   const [audience, setAudience] = useState("Everyone");
   const [category, setCategory] = useState("Education");
 
-  const [descriptionCount, setDescriptionCount] = useState("5");
+  const [descriptionCount, setDescriptionCount] =
+    useState("5");
+
   const [creativity, setCreativity] = useState(70);
 
-  const [results, setResults] = useState<DescriptionResult[]>([]);
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [results, setResults] = useState<
+    DescriptionResult[]
+  >([]);
+
+  const [copiedIndex, setCopiedIndex] =
+    useState<number | null>(null);
+
+  const [credits, setCredits] =
+    useState<number | null>(null);
 
   // =========================================================
-  // REGNERATE ONE DESCRIPTION
+  // LOAD CREDITS
   // =========================================================
 
-  async function regenerateDescription(index: number) {
+  useEffect(() => {
+    async function loadCredits() {
+      try {
+        const response = await fetch("/api/credits");
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json();
+
+        if (typeof data.credits === "number") {
+          setCredits(data.credits);
+        }
+      } catch (error) {
+        console.error(
+          "Failed to load credits:",
+          error
+        );
+      }
+    }
+
+    loadCredits();
+  }, []);
+
+  // =========================================================
+  // REGENERATE ONE DESCRIPTION
+  // =========================================================
+
+  async function regenerateDescription(
+    index: number
+  ) {
     const currentDescription = results[index];
 
     if (!currentDescription) {
@@ -60,10 +112,19 @@ export default function DescriptionGeneratorPage() {
     setError("");
 
     try {
-      const autoDetectInstruction =
-        language === "🌐 Auto Detect"
-          ? "Automatically detect the language from the Video Topic and generate the new description in the same language."
-          : `Generate the new description in ${language}.`;
+      const prompt =
+        buildDescriptionRegeneratePrompt({
+          topic,
+          keywords,
+          language,
+          tone,
+          length,
+          audience,
+          category,
+          currentDescription:
+            currentDescription.description,
+          creativity,
+        });
 
       const response = await fetch("/api/ai", {
         method: "POST",
@@ -72,140 +133,49 @@ export default function DescriptionGeneratorPage() {
         },
         body: JSON.stringify({
           json: true,
-          prompt: `
-You are an expert YouTube content strategist, SEO specialist, and audience engagement expert.
-
-Create ONE improved alternative YouTube video description.
-
-Video Topic:
-${topic}
-
-Keywords:
-${keywords || "None"}
-
-Language:
-${language}
-
-Language Instruction:
-${autoDetectInstruction}
-
-Tone:
-${tone}
-
-Length:
-${length}
-
-Audience:
-${audience}
-
-Category:
-${category}
-
-Creativity:
-${creativity}%
-
-Current Description:
-${currentDescription.description}
-
-DESCRIPTION REQUIREMENTS:
-
-- Create exactly ONE improved YouTube description.
-- Make it engaging, informative, natural, and useful.
-- Clearly explain what the video is about.
-- Naturally include relevant keywords when appropriate.
-- Follow the requested language.
-- Follow the requested tone.
-- Follow the requested length.
-- Optimize the description for YouTube SEO.
-- Make the opening lines engaging because they are important for viewers and search.
-- Avoid keyword stuffing.
-- Avoid misleading claims.
-- Do not use quotation marks around the entire description.
-- Do not add explanations outside the description.
-- Do not add numbering.
-- Do not return markdown.
-- Return ONLY valid JSON.
-
-SCORING REQUIREMENTS:
-
-For the generated description calculate:
-
-score:
-Overall YouTube description quality from 0 to 100.
-
-Consider:
-- Clarity
-- Relevance
-- Engagement
-- Readability
-- Audience appeal
-- Overall content quality
-
-ctr:
-Estimated CTR potential from 0.0 to 10.0.
-
-IMPORTANT:
-This is an AI estimate, NOT actual YouTube Analytics CTR.
-
-Consider:
-- Strength of the opening lines
-- Curiosity
-- Emotional appeal
-- Viewer interest
-- Likelihood of encouraging a click
-
-seo:
-SEO optimization score from 0 to 100.
-
-Consider:
-- Keyword relevance
-- Search intent
-- Keyword placement
-- Topic clarity
-- Search-friendly wording
-- Natural keyword usage
-- Overall YouTube SEO quality
-
-IMPORTANT:
-
-Do NOT generate random scores.
-
-The scores must reflect the actual quality of the generated description.
-
-Return exactly this JSON structure:
-
-{
-  "description": "Improved YouTube description",
-  "score": 94,
-  "ctr": 8.7,
-  "seo": 96
-}
-
-Rules:
-
-- score must be a number between 0 and 100.
-- ctr must be a number between 0 and 10.
-- seo must be a number between 0 and 100.
-- description must be a non-empty string.
-- Return valid JSON only.
-          `,
+          toolId: "description-generator",
+          count: 1,
+          action: "regenerate",
+          prompt,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || "AI request failed.");
+        throw new Error(
+          data.error || "AI request failed."
+        );
+      }
+
+      if (typeof data.credits === "number") {
+        setCredits(data.credits);
       }
 
       const parsed = JSON.parse(data.result);
 
       if (
         !parsed ||
-        typeof parsed.description !== "string" ||
-        !parsed.description.trim()
+        !Array.isArray(parsed.descriptions) ||
+        parsed.descriptions.length !== 1
       ) {
-        throw new Error("AI returned an invalid description.");
+        throw new Error(
+          "AI returned an invalid regenerated description response."
+        );
+      }
+
+      const regenerated: AIDescriptionItem =
+        parsed.descriptions[0];
+
+      if (
+        !regenerated ||
+        typeof regenerated.description !==
+          "string" ||
+        !regenerated.description.trim()
+      ) {
+        throw new Error(
+          "AI returned an invalid description."
+        );
       }
 
       const sanitizeNumber = (
@@ -219,30 +189,57 @@ Rules:
           return min;
         }
 
-        return Math.min(max, Math.max(min, number));
+        return Math.min(
+          max,
+          Math.max(min, number)
+        );
       };
 
-      const updatedDescription: DescriptionResult = {
-        description: parsed.description.trim(),
+      // New prompt uses "engagement" from 0-10.
+      // Existing UI displays this value as Estimated CTR.
+      const engagementValue =
+        regenerated.engagement ??
+        regenerated.ctr ??
+        0;
 
-        score: Math.round(
-          sanitizeNumber(parsed.score, 0, 100)
-        ),
+      const updatedDescription: DescriptionResult =
+        {
+          description:
+            regenerated.description.trim(),
 
-        ctr: Number(
-          sanitizeNumber(parsed.ctr, 0, 10).toFixed(1)
-        ),
+          score: Math.round(
+            sanitizeNumber(
+              regenerated.score,
+              0,
+              100
+            )
+          ),
 
-        seo: Math.round(
-          sanitizeNumber(parsed.seo, 0, 100)
-        ),
+          ctr: Number(
+            sanitizeNumber(
+              engagementValue,
+              0,
+              10
+            ).toFixed(1)
+          ),
 
-        favorite: currentDescription.favorite,
-      };
+          seo: Math.round(
+            sanitizeNumber(
+              regenerated.seo,
+              0,
+              100
+            )
+          ),
+
+          favorite:
+            currentDescription.favorite,
+        };
 
       setResults((prev) =>
         prev.map((item, i) =>
-          i === index ? updatedDescription : item
+          i === index
+            ? updatedDescription
+            : item
         )
       );
     } catch (error: unknown) {
@@ -287,7 +284,9 @@ Rules:
     index: number
   ) {
     try {
-      await navigator.clipboard.writeText(description);
+      await navigator.clipboard.writeText(
+        description
+      );
 
       setCopiedIndex(index);
 
@@ -297,7 +296,9 @@ Rules:
     } catch (error) {
       console.error("Copy failed:", error);
 
-      setError("Failed to copy description.");
+      setError(
+        "Failed to copy description."
+      );
     }
   }
 
@@ -307,7 +308,9 @@ Rules:
 
   async function generateDescriptions() {
     if (!topic.trim()) {
-      setError("Please enter a video topic first.");
+      setError(
+        "Please enter a video topic first."
+      );
       return;
     }
 
@@ -316,10 +319,18 @@ Rules:
     setResults([]);
 
     try {
-      const autoDetectInstruction =
-        language === "🌐 Auto Detect"
-          ? "Automatically detect the language from the Video Topic and generate all descriptions in the same language."
-          : `Generate all descriptions in ${language}.`;
+      const prompt = buildDescriptionPrompt({
+        topic,
+        keywords,
+        language,
+        tone,
+        length,
+        audience,
+        category,
+        descriptionCount:
+          Number(descriptionCount),
+        creativity,
+      });
 
       const response = await fetch("/api/ai", {
         method: "POST",
@@ -328,145 +339,22 @@ Rules:
         },
         body: JSON.stringify({
           json: true,
-          prompt: `
-You are an expert YouTube content strategist, SEO specialist, and audience engagement expert.
-
-Generate ${descriptionCount} high-quality YouTube video descriptions.
-
-Video Topic:
-${topic}
-
-Keywords:
-${keywords || "None"}
-
-Language:
-${language}
-
-Language Instruction:
-${autoDetectInstruction}
-
-Tone:
-${tone}
-
-Length:
-${length}
-
-Audience:
-${audience}
-
-Category:
-${category}
-
-Creativity:
-${creativity}%
-
-Number of Descriptions:
-${descriptionCount}
-
-DESCRIPTION REQUIREMENTS:
-
-- Generate exactly ${descriptionCount} unique YouTube descriptions.
-- Every description must be relevant to the video topic.
-- Make every description engaging and informative.
-- Clearly explain what the video is about.
-- Keep descriptions natural and easy to understand.
-- Naturally use relevant keywords when appropriate.
-- Follow the requested language.
-- Follow the requested tone.
-- Follow the requested length.
-- Optimize descriptions for YouTube SEO.
-- Make the opening lines engaging.
-- Avoid keyword stuffing.
-- Avoid misleading claims.
-- Do not use quotation marks around the entire description.
-- Do not add explanations.
-- Do not add numbering.
-- Do not return markdown.
-- Do not return any text outside the JSON object.
-
-SCORING REQUIREMENTS:
-
-For every description calculate:
-
-1. score
-
-Overall YouTube description quality score from 0 to 100.
-
-Consider:
-- Clarity
-- Relevance
-- Engagement
-- Readability
-- Audience appeal
-- Overall content quality
-
-2. ctr
-
-Estimated CTR potential from 0.0 to 10.0.
-
-IMPORTANT:
-This is an AI estimate, NOT actual YouTube Analytics CTR.
-
-Consider:
-- Strength of the opening lines
-- Curiosity
-- Emotional appeal
-- Viewer interest
-- Likelihood of encouraging a click
-
-3. seo
-
-SEO optimization score from 0 to 100.
-
-Consider:
-- Keyword relevance
-- Search intent
-- Keyword placement
-- Topic clarity
-- Search-friendly wording
-- Natural keyword usage
-- Overall YouTube SEO quality
-
-IMPORTANT:
-
-Do NOT give random scores.
-
-Scores must reflect the actual quality of each individual description.
-
-A stronger description should receive a higher score than a weaker description.
-
-Return ONLY this JSON structure:
-
-{
-  "descriptions": [
-    {
-      "description": "Example YouTube description",
-      "score": 94,
-      "ctr": 8.7,
-      "seo": 96
-    }
-  ]
-}
-
-IMPORTANT RULES:
-
-- The "descriptions" array MUST contain exactly ${descriptionCount} objects.
-- Every object must contain description, score, ctr, and seo.
-- score must be a number between 0 and 100.
-- ctr must be a number between 0 and 10.
-- seo must be a number between 0 and 100.
-- description must be a non-empty string.
-- Do not return numbering.
-- Do not return explanations.
-- Return valid JSON only.
-          `,
+          toolId: "description-generator",
+          count: Number(descriptionCount),
+          prompt,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || "AI request failed.");
+        throw new Error(
+          data.error || "AI request failed."
+        );
+      }
+
+      if (typeof data.credits === "number") {
+        setCredits(data.credits);
       }
 
       const parsed = JSON.parse(data.result);
@@ -491,53 +379,82 @@ IMPORTANT RULES:
           return min;
         }
 
-        return Math.min(max, Math.max(min, number));
+        return Math.min(
+          max,
+          Math.max(min, number)
+        );
       };
 
       const newResults: DescriptionResult[] =
         parsed.descriptions
-          .slice(0, Number(descriptionCount))
+          .slice(
+            0,
+            Number(descriptionCount)
+          )
           .filter(
-            (item: unknown): item is {
-              description: string;
-              score?: unknown;
-              ctr?: unknown;
-              seo?: unknown;
-            } =>
+            (
+              item: unknown
+            ): item is AIDescriptionItem =>
               !!item &&
               typeof item === "object" &&
               "description" in item &&
-              typeof (item as { description?: unknown })
-                .description === "string" &&
+              typeof (
+                item as {
+                  description?: unknown;
+                }
+              ).description === "string" &&
               !!(
-                item as { description: string }
+                item as {
+                  description: string;
+                }
               ).description.trim()
           )
-          .map((item: any) => ({
-            description: item.description.trim(),
+          .map(
+            (item: AIDescriptionItem) => {
+              const engagementValue =
+                item.engagement ??
+                item.ctr ??
+                0;
 
-            score: Math.round(
-              sanitizeNumber(item.score, 0, 100)
-            ),
+              return {
+                description:
+                  item.description.trim(),
 
-            ctr: Number(
-              sanitizeNumber(
-                item.ctr,
-                0,
-                10
-              ).toFixed(1)
-            ),
+                score: Math.round(
+                  sanitizeNumber(
+                    item.score,
+                    0,
+                    100
+                  )
+                ),
 
-            seo: Math.round(
-              sanitizeNumber(item.seo, 0, 100)
-            ),
+                ctr: Number(
+                  sanitizeNumber(
+                    engagementValue,
+                    0,
+                    10
+                  ).toFixed(1)
+                ),
 
-            favorite: false,
-          }));
+                seo: Math.round(
+                  sanitizeNumber(
+                    item.seo,
+                    0,
+                    100
+                  )
+                ),
 
-      if (newResults.length === 0) {
+                favorite: false,
+              };
+            }
+          );
+
+      if (
+        newResults.length !==
+        Number(descriptionCount)
+      ) {
         throw new Error(
-          "AI returned no valid descriptions."
+          `AI returned ${newResults.length} descriptions instead of ${descriptionCount}.`
         );
       }
 
@@ -576,9 +493,24 @@ IMPORTANT RULES:
 
         <div className="min-w-0 rounded-3xl border border-white/10 bg-[#050814] p-4 sm:p-6">
 
-          <h2 className="mb-6 text-xl font-bold text-white">
-            Generator
-          </h2>
+          {/* Generator Header + Credits */}
+          <div className="mb-6 flex items-center justify-between gap-3">
+            <h2 className="text-xl font-bold text-white">
+              Generator
+            </h2>
+
+            {credits !== null && (
+              <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-sm">
+                <span className="text-slate-400">
+                  Credits:{" "}
+                </span>
+
+                <span className="font-semibold text-blue-400">
+                  {credits}
+                </span>
+              </div>
+            )}
+          </div>
 
           {/* Error */}
           {error && (
@@ -624,7 +556,9 @@ Examples:
               <input
                 value={keywords}
                 onChange={(e) =>
-                  setKeywords(e.target.value)
+                  setKeywords(
+                    e.target.value
+                  )
                 }
                 placeholder="youtube, growth, seo"
                 className="w-full rounded-xl border border-white/10 bg-[#0B1220] px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-blue-500"
@@ -643,11 +577,15 @@ Examples:
                 <select
                   value={language}
                   onChange={(e) =>
-                    setLanguage(e.target.value)
+                    setLanguage(
+                      e.target.value
+                    )
                   }
                   className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-3 py-3 text-sm text-white outline-none focus:border-blue-500"
                 >
-                  <option>🌐 Auto Detect</option>
+                  <option>
+                    🌐 Auto Detect
+                  </option>
                   <option>English</option>
                   <option>বাংলা</option>
                   <option>हिन्दी</option>
@@ -667,11 +605,15 @@ Examples:
                 <select
                   value={tone}
                   onChange={(e) =>
-                    setTone(e.target.value)
+                    setTone(
+                      e.target.value
+                    )
                   }
                   className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-3 py-3 text-sm text-white outline-none focus:border-blue-500"
                 >
-                  <option>Professional</option>
+                  <option>
+                    Professional
+                  </option>
                   <option>Friendly</option>
                   <option>Funny</option>
                   <option>Bold</option>
@@ -687,7 +629,9 @@ Examples:
                 <select
                   value={length}
                   onChange={(e) =>
-                    setLength(e.target.value)
+                    setLength(
+                      e.target.value
+                    )
                   }
                   className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-3 py-3 text-sm text-white outline-none focus:border-blue-500"
                 >
@@ -711,14 +655,24 @@ Examples:
                 <select
                   value={audience}
                   onChange={(e) =>
-                    setAudience(e.target.value)
+                    setAudience(
+                      e.target.value
+                    )
                   }
                   className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-4 py-3 text-white outline-none transition focus:border-blue-500"
                 >
-                  <option>Everyone</option>
-                  <option>Beginners</option>
-                  <option>Students</option>
-                  <option>Professionals</option>
+                  <option>
+                    Everyone
+                  </option>
+                  <option>
+                    Beginners
+                  </option>
+                  <option>
+                    Students
+                  </option>
+                  <option>
+                    Professionals
+                  </option>
                   <option>Kids</option>
                 </select>
               </div>
@@ -732,16 +686,26 @@ Examples:
                 <select
                   value={category}
                   onChange={(e) =>
-                    setCategory(e.target.value)
+                    setCategory(
+                      e.target.value
+                    )
                   }
-                  className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-4 py-3 text-white outline-none transition focus:border-blue-500"
+                  className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-4 py-3 text-white outline-none focus:border-blue-500"
                 >
-                  <option>Education</option>
-                  <option>Technology</option>
+                  <option>
+                    Education
+                  </option>
+                  <option>
+                    Technology
+                  </option>
                   <option>Gaming</option>
                   <option>Business</option>
-                  <option>Entertainment</option>
-                  <option>Lifestyle</option>
+                  <option>
+                    Entertainment
+                  </option>
+                  <option>
+                    Lifestyle
+                  </option>
                   <option>Finance</option>
                   <option>Health</option>
                 </select>
@@ -754,9 +718,13 @@ Examples:
                 </label>
 
                 <select
-                  value={descriptionCount}
+                  value={
+                    descriptionCount
+                  }
                   onChange={(e) =>
-                    setDescriptionCount(e.target.value)
+                    setDescriptionCount(
+                      e.target.value
+                    )
                   }
                   className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-4 py-3 text-white outline-none transition focus:border-blue-500"
                 >
@@ -787,7 +755,9 @@ Examples:
                   value={creativity}
                   onChange={(e) =>
                     setCreativity(
-                      Number(e.target.value)
+                      Number(
+                        e.target.value
+                      )
                     )
                   }
                   className="w-full accent-blue-500"
@@ -799,7 +769,9 @@ Examples:
             {/* Generate Button */}
             <button
               type="button"
-              onClick={generateDescriptions}
+              onClick={
+                generateDescriptions
+              }
               disabled={
                 loading ||
                 topic.trim() === ""
@@ -818,6 +790,11 @@ Examples:
                 <>
                   <Wand2 size={18} />
                   Generate Descriptions
+
+                  <span className="ml-1 rounded-lg bg-white/15 px-2 py-1 text-xs font-medium">
+                    {descriptionCount}{" "}
+                    Credits
+                  </span>
                 </>
               )}
             </button>
@@ -846,7 +823,9 @@ Examples:
 
             <button
               type="button"
-              onClick={generateDescriptions}
+              onClick={
+                generateDescriptions
+              }
               disabled={
                 loading ||
                 topic.trim() === ""
@@ -892,274 +871,293 @@ Examples:
 
             <div className="space-y-4">
 
-              {results.map((result, index) => {
+              {results.map(
+                (result, index) => {
 
-                const maxScore = Math.max(
-                  ...results.map(
-                    (r: DescriptionResult) => r.score
-                  )
-                );
+                  const maxScore =
+                    Math.max(
+                      ...results.map(
+                        (
+                          r: DescriptionResult
+                        ) => r.score
+                      )
+                    );
 
-                const isBest =
-                  result.score > 0 &&
-                  result.score === maxScore;
+                  const isBest =
+                    result.score > 0 &&
+                    result.score ===
+                      maxScore;
 
-                const isRegenerating =
-                  regeneratingIndex === index;
+                  const isRegenerating =
+                    regeneratingIndex ===
+                    index;
 
-                return (
+                  return (
 
-                  <div
-                    key={`${index}-${result.description}`}
-                    className="min-w-0 rounded-2xl border border-white/10 bg-[#0B1220] px-4 py-4 transition-all duration-300 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/10 sm:px-6 sm:py-4"
-                  >
+                    <div
+                      key={`${index}-${result.description}`}
+                      className="min-w-0 rounded-2xl border border-white/10 bg-[#0B1220] px-4 py-4 transition-all duration-300 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/10 sm:px-6 sm:py-4"
+                    >
 
-                    {/* Result Content */}
-                    <div className="min-w-0">
+                      {/* Result Content */}
+                      <div className="min-w-0">
 
-                      {/* Header */}
-                      <div className="mb-3 flex flex-wrap items-center gap-3">
+                        {/* Header */}
+                        <div className="mb-3 flex flex-wrap items-center gap-3">
 
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-400">
-                          Description {index + 1}
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-400">
+                            Description{" "}
+                            {index + 1}
+                          </p>
+
+                          {isBest && (
+                            <span className="rounded-full bg-yellow-500/20 px-2 py-0.5 text-[10px] font-bold text-yellow-400">
+                              🏆 BEST
+                            </span>
+                          )}
+
+                        </div>
+
+                        {/* Description */}
+                        <p className="break-words whitespace-pre-wrap text-sm leading-7 text-white sm:text-base">
+                          {
+                            result.description
+                          }
                         </p>
 
-                        {isBest && (
-                          <span className="rounded-full bg-yellow-500/20 px-2 py-0.5 text-[10px] font-bold text-yellow-400">
-                            🏆 BEST
+                        {/* AI Score */}
+                        <p className="mt-4 text-sm font-semibold text-emerald-400">
+                          AI Score{" "}
+                          {result.score > 0
+                            ? `${result.score}%`
+                            : "Analyzing..."}
+                        </p>
+
+                        {/* Metrics */}
+                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+
+                          {/* CTR */}
+                          <span className="text-slate-400">
+                            📈{" "}
+                            <span className="font-semibold text-cyan-400">
+                              Estimated CTR{" "}
+                              {result.ctr >
+                              0
+                                ? `${result.ctr}/10`
+                                : "Analyzing..."}
+                            </span>
                           </span>
-                        )}
 
-                      </div>
-
-                      {/* Description */}
-                      <p className="break-words whitespace-pre-wrap text-sm leading-7 text-white sm:text-base">
-                        {result.description}
-                      </p>
-
-                      {/* AI Score */}
-                      <p className="mt-4 text-sm font-semibold text-emerald-400">
-                        AI Score{" "}
-                        {result.score > 0
-                          ? `${result.score}%`
-                          : "Analyzing..."}
-                      </p>
-
-                      {/* Metrics */}
-                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-
-                        {/* CTR */}
-                        <span className="text-slate-400">
-                          📈{" "}
-                          <span className="font-semibold text-cyan-400">
-                            Estimated CTR{" "}
-                            {result.ctr > 0
-                              ? `${result.ctr}/10`
-                              : "Analyzing..."}
+                          {/* SEO */}
+                          <span className="text-slate-400">
+                            🔍{" "}
+                            <span className="font-semibold text-green-400">
+                              SEO{" "}
+                              {result.seo >
+                              0
+                                ? `${result.seo}/100`
+                                : "Analyzing..."}
+                            </span>
                           </span>
-                        </span>
 
-                        {/* SEO */}
-                        <span className="text-slate-400">
-                          🔍{" "}
-                          <span className="font-semibold text-green-400">
-                            SEO{" "}
-                            {result.seo > 0
-                              ? `${result.seo}/100`
-                              : "Analyzing..."}
-                          </span>
-                        </span>
-
-                        {/* Character Count */}
-                        <span className="text-slate-400">
-                          ✍{" "}
-                          <span className="font-semibold text-yellow-400">
-                            {result.description.length} chars
-                          </span>
-                        </span>
-
-                      </div>
-
-                      {/* =================================================
-                          ACTIONS
-                      ================================================= */}
-
-                      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-white/5 pt-4">
-
-                        {/* Copy */}
-                        <div className="group relative">
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              copyDescription(
-                                result.description,
-                                index
-                              )
-                            }
-                            disabled={
-                              isRegenerating
-                            }
-                            className="rounded-xl border border-white/10 bg-[#050814] p-3 text-slate-400 transition hover:border-blue-500 hover:text-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <Copy size={18} />
-                          </button>
-
-                          <span
-                            className="
-                              pointer-events-none
-                              absolute
-                              bottom-full
-                              left-1/2
-                              z-20
-                              mb-2
-                              -translate-x-1/2
-                              translate-y-1
-                              whitespace-nowrap
-                              rounded-lg
-                              bg-slate-900
-                              px-3
-                              py-1
-                              text-xs
-                              text-white
-                              opacity-0
-                              shadow-lg
-                              transition-all
-                              duration-200
-                              group-hover:translate-y-0
-                              group-hover:opacity-100
-                            "
-                          >
-                            {copiedIndex === index
-                              ? "Copied!"
-                              : "Copy Description"}
+                          {/* Character Count */}
+                          <span className="text-slate-400">
+                            ✍{" "}
+                            <span className="font-semibold text-yellow-400">
+                              {
+                                result
+                                  .description
+                                  .length
+                              }{" "}
+                              chars
+                            </span>
                           </span>
 
                         </div>
 
-                        {/* Favorite */}
-                        <div className="group relative">
+                        {/* ACTIONS */}
+                        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-white/5 pt-4">
 
-                          <button
-                            type="button"
-                            onClick={() =>
-                              toggleFavorite(index)
-                            }
-                            disabled={
-                              isRegenerating
-                            }
-                            className={`rounded-xl border bg-[#050814] p-3 transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                              result.favorite
-                                ? "border-pink-500 text-pink-500"
-                                : "border-white/10 text-slate-400 hover:border-pink-500 hover:text-pink-400"
-                            }`}
-                          >
-                            <Heart
-                              size={18}
-                              className={
-                                result.favorite
-                                  ? "fill-current"
-                                  : ""
+                          {/* Copy */}
+                          <div className="group relative">
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                copyDescription(
+                                  result.description,
+                                  index
+                                )
                               }
-                            />
-                          </button>
-
-                          <span
-                            className="
-                              pointer-events-none
-                              absolute
-                              bottom-full
-                              left-1/2
-                              z-20
-                              mb-2
-                              -translate-x-1/2
-                              translate-y-1
-                              whitespace-nowrap
-                              rounded-lg
-                              bg-slate-900
-                              px-3
-                              py-1
-                              text-xs
-                              text-white
-                              opacity-0
-                              shadow-lg
-                              transition-all
-                              duration-200
-                              group-hover:translate-y-0
-                              group-hover:opacity-100
-                            "
-                          >
-                            {result.favorite
-                              ? "Remove Favorite"
-                              : "Add Favorite"}
-                          </span>
-
-                        </div>
-
-                        {/* Regenerate */}
-                        <div className="group relative">
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              regenerateDescription(
-                                index
-                              )
-                            }
-                            disabled={
-                              isRegenerating
-                            }
-                            className="rounded-xl border border-white/10 bg-[#050814] p-3 text-slate-400 transition hover:border-green-500 hover:text-green-400 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <RefreshCcw
-                              size={18}
-                              className={
+                              disabled={
                                 isRegenerating
-                                  ? "animate-spin"
-                                  : "transition-transform duration-300 group-hover:rotate-180"
                               }
-                            />
-                          </button>
+                              className="rounded-xl border border-white/10 bg-[#050814] p-3 text-slate-400 transition hover:border-blue-500 hover:text-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Copy
+                                size={18}
+                              />
+                            </button>
 
-                          <span
-                            className="
-                              pointer-events-none
-                              absolute
-                              bottom-full
-                              left-1/2
-                              z-20
-                              mb-2
-                              -translate-x-1/2
-                              translate-y-1
-                              whitespace-nowrap
-                              rounded-lg
-                              bg-slate-900
-                              px-3
-                              py-1
-                              text-xs
-                              text-white
-                              opacity-0
-                              shadow-lg
-                              transition-all
-                              duration-200
-                              group-hover:translate-y-0
-                              group-hover:opacity-100
-                            "
-                          >
-                            {isRegenerating
-                              ? "Regenerating..."
-                              : "Generate Again"}
-                          </span>
+                            <span
+                              className="
+                                pointer-events-none
+                                absolute
+                                bottom-full
+                                left-1/2
+                                z-20
+                                mb-2
+                                -translate-x-1/2
+                                translate-y-1
+                                whitespace-nowrap
+                                rounded-lg
+                                bg-slate-900
+                                px-3
+                                py-1
+                                text-xs
+                                text-white
+                                opacity-0
+                                shadow-lg
+                                transition-all
+                                duration-200
+                                group-hover:translate-y-0
+                                group-hover:opacity-100
+                              "
+                            >
+                              {copiedIndex ===
+                              index
+                                ? "Copied!"
+                                : "Copy Description"}
+                            </span>
+
+                          </div>
+
+                          {/* Favorite */}
+                          <div className="group relative">
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                toggleFavorite(
+                                  index
+                                )
+                              }
+                              disabled={
+                                isRegenerating
+                              }
+                              className={`rounded-xl border bg-[#050814] p-3 transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                                result.favorite
+                                  ? "border-pink-500 text-pink-500"
+                                  : "border-white/10 text-slate-400 hover:border-pink-500 hover:text-pink-400"
+                              }`}
+                            >
+                              <Heart
+                                size={18}
+                                className={
+                                  result.favorite
+                                    ? "fill-current"
+                                    : ""
+                                }
+                              />
+                            </button>
+
+                            <span
+                              className="
+                                pointer-events-none
+                                absolute
+                                bottom-full
+                                left-1/2
+                                z-20
+                                mb-2
+                                -translate-x-1/2
+                                translate-y-1
+                                whitespace-nowrap
+                                rounded-lg
+                                bg-slate-900
+                                px-3
+                                py-1
+                                text-xs
+                                text-white
+                                opacity-0
+                                shadow-lg
+                                transition-all
+                                duration-200
+                                group-hover:translate-y-0
+                                group-hover:opacity-100
+                              "
+                            >
+                              {result.favorite
+                                ? "Remove Favorite"
+                                : "Add Favorite"}
+                            </span>
+
+                          </div>
+
+                          {/* Regenerate */}
+                          <div className="group relative">
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                regenerateDescription(
+                                  index
+                                )
+                              }
+                              disabled={
+                                isRegenerating
+                              }
+                              className="rounded-xl border border-white/10 bg-[#050814] p-3 text-slate-400 transition hover:border-green-500 hover:text-green-400 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <RefreshCcw
+                                size={18}
+                                className={
+                                  isRegenerating
+                                    ? "animate-spin"
+                                    : "transition-transform duration-300 group-hover:rotate-180"
+                                }
+                              />
+                            </button>
+
+                            <span
+                              className="
+                                pointer-events-none
+                                absolute
+                                bottom-full
+                                left-1/2
+                                z-20
+                                mb-2
+                                -translate-x-1/2
+                                translate-y-1
+                                whitespace-nowrap
+                                rounded-lg
+                                bg-slate-900
+                                px-3
+                                py-1
+                                text-xs
+                                text-white
+                                opacity-0
+                                shadow-lg
+                                transition-all
+                                duration-200
+                                group-hover:translate-y-0
+                                group-hover:opacity-100
+                              "
+                            >
+                              {isRegenerating
+                                ? "Regenerating..."
+                                : "Generate Again — 1 Credit"}
+                            </span>
+
+                          </div>
 
                         </div>
 
                       </div>
 
                     </div>
-
-                  </div>
-                );
-              })}
+                  );
+                }
+              )}
 
             </div>
           )}

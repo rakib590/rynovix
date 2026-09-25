@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Wand2,
@@ -11,6 +11,10 @@ import {
 } from "lucide-react";
 
 import ToolLayout from "@/components/ai-tools/ToolLayout";
+import {
+  buildTitlePrompt,
+  buildTitleRegeneratePrompt,
+} from "@/lib/prompts/title";
 
 type TitleResult = {
   title: string;
@@ -28,10 +32,10 @@ export default function TitleGeneratorPage() {
   const [length, setLength] = useState("Medium");
 
   const [loading, setLoading] = useState(false);
+  const [credits, setCredits] = useState<number | null>(null);
 
-  const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(
-    null
-  );
+  const [regeneratingIndex, setRegeneratingIndex] =
+    useState<number | null>(null);
 
   const [error, setError] = useState("");
 
@@ -44,7 +48,32 @@ export default function TitleGeneratorPage() {
 
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
-  // ⭐ Regenerate One Title
+  useEffect(() => {
+    async function loadCredits() {
+      try {
+        const response = await fetch("/api/credits");
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json();
+
+        if (typeof data.credits === "number") {
+          setCredits(data.credits);
+        }
+      } catch (error) {
+        console.error("Failed to load credits:", error);
+      }
+    }
+
+    loadCredits();
+  }, []);
+
+  // ============================================================
+  // ⭐ REGENERATE ONE TITLE
+  // ============================================================
+
   async function regenerateTitle(index: number) {
     const currentTitle = results[index];
 
@@ -56,10 +85,17 @@ export default function TitleGeneratorPage() {
     setError("");
 
     try {
-      const autoDetectInstruction =
-        language === "🌐 Auto Detect"
-          ? "Automatically detect the language from the Video Topic and generate the new title in the same language."
-          : `Generate the new title in ${language}.`;
+      const prompt = buildTitleRegeneratePrompt({
+        topic,
+        keywords,
+        language,
+        tone,
+        length,
+        audience,
+        category,
+        currentTitle: currentTitle.title,
+        creativity,
+      });
 
       const response = await fetch("/api/ai", {
         method: "POST",
@@ -68,114 +104,10 @@ export default function TitleGeneratorPage() {
         },
         body: JSON.stringify({
           json: true,
-          prompt: `
-You are an expert YouTube title strategist, SEO specialist, and CTR optimization expert.
-
-Create ONE improved alternative YouTube title.
-
-Video Topic:
-${topic}
-
-Keywords:
-${keywords || "None"}
-
-Language:
-${language}
-
-Language Instruction:
-${autoDetectInstruction}
-
-Tone:
-${tone}
-
-Length:
-${length}
-
-Audience:
-${audience}
-
-Category:
-${category}
-
-Creativity:
-${creativity}%
-
-Current Title:
-${currentTitle.title}
-
-Requirements:
-
-- Create exactly ONE improved YouTube title.
-- Make it engaging and highly clickable.
-- Keep it relevant to the video topic.
-- Naturally use relevant keywords when appropriate.
-- Follow the requested language.
-- Follow the requested tone.
-- Follow the requested length.
-- Make it attractive without misleading clickbait.
-- Do not use quotation marks.
-- Do not add numbering.
-- Do not add explanations.
-- Return ONLY valid JSON.
-
-Analyze the generated title and calculate:
-
-score:
-Overall YouTube title quality from 0 to 100.
-
-Consider:
-- Clickability
-- Clarity
-- Relevance
-- Curiosity
-- Audience appeal
-- Natural wording
-- Overall title strength
-
-ctr:
-Estimated CTR potential from 0.0 to 10.0.
-
-IMPORTANT:
-This is an AI estimate, NOT actual YouTube Analytics CTR.
-
-Consider:
-- Curiosity
-- Emotional appeal
-- Specificity
-- Strong wording
-- Likelihood of getting a click from the target audience
-
-seo:
-SEO optimization score from 0 to 100.
-
-Consider:
-- Keyword relevance
-- Search intent
-- Keyword placement
-- Topic clarity
-- Search-friendly wording
-- Natural keyword usage
-
-IMPORTANT:
-Do NOT generate random scores.
-
-The scores must reflect the actual quality of the generated title.
-
-Return exactly this JSON structure:
-
-{
-  "title": "Improved YouTube title",
-  "score": 94,
-  "ctr": 8.7,
-  "seo": 96
-}
-
-Rules:
-
-- score must be a number between 0 and 100.
-- ctr must be a number between 0 and 10.
-- seo must be a number between 0 and 100.
-      `,
+          toolId: "title-generator",
+          count: 1,
+          action: "regenerate",
+          prompt,
         }),
       });
 
@@ -185,12 +117,28 @@ Rules:
         throw new Error(data.error || "AI request failed.");
       }
 
+      if (typeof data.credits === "number") {
+        setCredits(data.credits);
+      }
+
       const parsed = JSON.parse(data.result);
 
       if (
         !parsed ||
-        typeof parsed.title !== "string" ||
-        !parsed.title.trim()
+        !Array.isArray(parsed.titles) ||
+        parsed.titles.length !== 1
+      ) {
+        throw new Error(
+          "AI returned an invalid regenerated title response."
+        );
+      }
+
+      const regenerated = parsed.titles[0];
+
+      if (
+        !regenerated ||
+        typeof regenerated.title !== "string" ||
+        !regenerated.title.trim()
       ) {
         throw new Error("AI returned an invalid title.");
       }
@@ -210,18 +158,30 @@ Rules:
       };
 
       const updatedTitle: TitleResult = {
-        title: parsed.title.trim(),
+        title: regenerated.title.trim(),
 
         score: Math.round(
-          sanitizeNumber(parsed.score, 0, 100)
+          sanitizeNumber(
+            regenerated.score,
+            0,
+            100
+          )
         ),
 
         ctr: Number(
-          sanitizeNumber(parsed.ctr, 0, 10).toFixed(1)
+          sanitizeNumber(
+            regenerated.ctr,
+            0,
+            10
+          ).toFixed(1)
         ),
 
         seo: Math.round(
-          sanitizeNumber(parsed.seo, 0, 100)
+          sanitizeNumber(
+            regenerated.seo,
+            0,
+            100
+          )
         ),
 
         favorite: currentTitle.favorite,
@@ -233,7 +193,10 @@ Rules:
         )
       );
     } catch (error: any) {
-      console.error("Regenerate title failed:", error);
+      console.error(
+        "Regenerate title failed:",
+        error
+      );
 
       setError(
         error?.message ||
@@ -244,7 +207,10 @@ Rules:
     }
   }
 
-  // ⭐ Favorite Toggle
+  // ============================================================
+  // ⭐ FAVORITE TOGGLE
+  // ============================================================
+
   function toggleFavorite(index: number) {
     setResults((prev) =>
       prev.map((item, i) =>
@@ -258,8 +224,14 @@ Rules:
     );
   }
 
-  // ⭐ Copy Title
-  async function copyTitle(title: string, index: number) {
+  // ============================================================
+  // ⭐ COPY TITLE
+  // ============================================================
+
+  async function copyTitle(
+    title: string,
+    index: number
+  ) {
     try {
       await navigator.clipboard.writeText(title);
 
@@ -275,7 +247,10 @@ Rules:
     }
   }
 
-  // ⭐ Generate Titles
+  // ============================================================
+  // ⭐ GENERATE TITLES
+  // ============================================================
+
   async function generateTitles() {
     if (!topic.trim()) {
       setError("Please enter a video topic first.");
@@ -287,10 +262,17 @@ Rules:
     setResults([]);
 
     try {
-      const autoDetectInstruction =
-        language === "🌐 Auto Detect"
-          ? "Automatically detect the language from the Video Topic and generate all titles in the same language."
-          : `Generate all titles in ${language}.`;
+      const prompt = buildTitlePrompt({
+        topic,
+        keywords,
+        language,
+        tone,
+        length,
+        audience,
+        category,
+        titleCount: Number(titleCount),
+        creativity,
+      });
 
       const response = await fetch("/api/ai", {
         method: "POST",
@@ -299,146 +281,33 @@ Rules:
         },
         body: JSON.stringify({
           json: true,
-          prompt: `
-You are an expert YouTube title strategist, SEO specialist, and CTR optimization expert.
-
-Generate ${titleCount} high-quality YouTube titles.
-
-Video Topic:
-${topic}
-
-Keywords:
-${keywords || "None"}
-
-Language:
-${language}
-
-Language Instruction:
-${autoDetectInstruction}
-
-Tone:
-${tone}
-
-Length:
-${length}
-
-Audience:
-${audience}
-
-Category:
-${category}
-
-Creativity:
-${creativity}%
-
-Number of Titles:
-${titleCount}
-
-TITLE REQUIREMENTS:
-
-- Generate exactly ${titleCount} unique YouTube titles.
-- Every title must be relevant to the video topic.
-- Make every title engaging and clickable.
-- Keep titles natural and easy to understand.
-- Naturally use relevant keywords when appropriate.
-- Follow the requested language.
-- Follow the requested tone.
-- Follow the requested length.
-- Avoid misleading clickbait.
-- Do not use quotation marks.
-- Do not add explanations.
-- Do not add numbering.
-- Do not return markdown.
-- Do not return any text outside the JSON object.
-
-SCORING REQUIREMENTS:
-
-For every title calculate:
-
-1. score
-
-Overall YouTube title quality score from 0 to 100.
-
-Consider:
-- Clickability
-- Clarity
-- Relevance
-- Curiosity
-- Audience appeal
-- Natural wording
-- Overall title strength
-
-2. ctr
-
-Estimated CTR potential from 0.0 to 10.0.
-
-IMPORTANT:
-This is an AI estimate, NOT actual YouTube Analytics CTR.
-
-Consider:
-- Curiosity
-- Emotional appeal
-- Specificity
-- Strong wording
-- Likelihood of getting a click from the target audience
-
-3. seo
-
-SEO optimization score from 0 to 100.
-
-Consider:
-- Keyword relevance
-- Search intent
-- Keyword placement
-- Topic clarity
-- Search-friendly wording
-- Natural keyword usage
-
-IMPORTANT:
-
-Do NOT give random scores.
-
-Scores must reflect the actual quality of each individual title.
-
-A stronger title should receive a higher score than a weaker title.
-
-Return ONLY this JSON structure:
-
-{
-  "titles": [
-    {
-      "title": "Example YouTube title",
-      "score": 94,
-      "ctr": 8.7,
-      "seo": 96
-    }
-  ]
-}
-
-IMPORTANT RULES:
-
-- The "titles" array MUST contain exactly ${titleCount} objects.
-- Every object must contain title, score, ctr, and seo.
-- score must be a number between 0 and 100.
-- ctr must be a number between 0 and 10.
-- seo must be a number between 0 and 100.
-- Do not return numbering.
-- Do not return explanations.
-- Return valid JSON only.
-        `,
+          toolId: "title-generator",
+          count: Number(titleCount),
+          prompt,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || "AI request failed.");
+        throw new Error(
+          data.error || "AI request failed."
+        );
+      }
+
+      if (typeof data.credits === "number") {
+        setCredits(data.credits);
       }
 
       const parsed = JSON.parse(data.result);
 
-      if (!parsed || !Array.isArray(parsed.titles)) {
-        throw new Error("AI returned an invalid title response.");
+      if (
+        !parsed ||
+        !Array.isArray(parsed.titles)
+      ) {
+        throw new Error(
+          "AI returned an invalid title response."
+        );
       }
 
       const sanitizeNumber = (
@@ -452,42 +321,66 @@ IMPORTANT RULES:
           return min;
         }
 
-        return Math.min(max, Math.max(min, number));
+        return Math.min(
+          max,
+          Math.max(min, number)
+        );
       };
 
-      const newResults: TitleResult[] = parsed.titles
-        .slice(0, Number(titleCount))
-        .filter(
-          (item: any) =>
-            item &&
-            typeof item.title === "string" &&
-            item.title.trim().length > 0
-        )
-        .map((item: any) => ({
-          title: item.title.trim(),
+      const newResults: TitleResult[] =
+        parsed.titles
+          .slice(0, Number(titleCount))
+          .filter(
+            (item: any) =>
+              item &&
+              typeof item.title === "string" &&
+              item.title.trim().length > 0
+          )
+          .map((item: any) => ({
+            title: item.title.trim(),
 
-          score: Math.round(
-            sanitizeNumber(item.score, 0, 100)
-          ),
+            score: Math.round(
+              sanitizeNumber(
+                item.score,
+                0,
+                100
+              )
+            ),
 
-          ctr: Number(
-            sanitizeNumber(item.ctr, 0, 10).toFixed(1)
-          ),
+            ctr: Number(
+              sanitizeNumber(
+                item.ctr,
+                0,
+                10
+              ).toFixed(1)
+            ),
 
-          seo: Math.round(
-            sanitizeNumber(item.seo, 0, 100)
-          ),
+            seo: Math.round(
+              sanitizeNumber(
+                item.seo,
+                0,
+                100
+              )
+            ),
 
-          favorite: false,
-        }));
+            favorite: false,
+          }));
 
-      if (newResults.length === 0) {
-        throw new Error("AI returned no valid titles.");
+      if (
+        newResults.length !==
+        Number(titleCount)
+      ) {
+        throw new Error(
+          `AI returned ${newResults.length} titles instead of ${titleCount}.`
+        );
       }
 
       setResults(newResults);
     } catch (error: any) {
-      console.error("Generate titles failed:", error);
+      console.error(
+        "Generate titles failed:",
+        error
+      );
 
       setError(
         error?.message ||
@@ -509,9 +402,23 @@ IMPORTANT RULES:
         {/* ================= LEFT — GENERATOR ================= */}
         <div className="rounded-3xl border border-white/10 bg-[#050814] p-4 sm:p-6">
 
-          <h2 className="mb-6 text-xl font-bold text-white">
-            Generator
-          </h2>
+          <div className="mb-6 flex items-center justify-between gap-3">
+            <h2 className="text-xl font-bold text-white">
+              Generator
+            </h2>
+
+            {credits !== null && (
+              <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-sm">
+                <span className="text-slate-400">
+                  Credits:{" "}
+                </span>
+
+                <span className="font-semibold text-blue-400">
+                  {credits}
+                </span>
+              </div>
+            )}
+          </div>
 
           {/* Error */}
           {error && (
@@ -719,7 +626,9 @@ Examples:
                   step="1"
                   value={creativity}
                   onChange={(e) =>
-                    setCreativity(Number(e.target.value))
+                    setCreativity(
+                      Number(e.target.value)
+                    )
                   }
                   className="w-full accent-blue-500"
                 />
@@ -732,7 +641,8 @@ Examples:
               type="button"
               onClick={generateTitles}
               disabled={
-                loading || topic.trim() === ""
+                loading ||
+                topic.trim() === ""
               }
               className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -748,6 +658,13 @@ Examples:
                 <>
                   <Wand2 size={18} />
                   Generate Titles
+
+                  <span className="ml-1 rounded-lg bg-white/15 px-2 py-1 text-xs font-medium">
+                    {titleCount} Credit
+                    {Number(titleCount) !== 1
+                      ? "s"
+                      : ""}
+                  </span>
                 </>
               )}
             </button>
@@ -775,7 +692,8 @@ Examples:
               type="button"
               onClick={generateTitles}
               disabled={
-                loading || topic.trim() === ""
+                loading ||
+                topic.trim() === ""
               }
               className="shrink-0 rounded-xl border border-white/10 bg-[#0B1220] p-3 text-slate-400 transition hover:border-blue-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
               title="Generate Again"
@@ -783,7 +701,9 @@ Examples:
               <RefreshCcw
                 size={18}
                 className={
-                  loading ? "animate-spin" : ""
+                  loading
+                    ? "animate-spin"
+                    : ""
                 }
               />
             </button>
@@ -812,10 +732,10 @@ Examples:
             <div className="space-y-4">
 
               {results.map((result, index) => {
-
                 const maxScore = Math.max(
                   ...results.map(
-                    (r: TitleResult) => r.score
+                    (r: TitleResult) =>
+                      r.score
                   )
                 );
 
@@ -916,7 +836,9 @@ Examples:
                                 index
                               )
                             }
-                            disabled={isRegenerating}
+                            disabled={
+                              isRegenerating
+                            }
                             className="rounded-xl border border-white/10 bg-[#050814] p-3 text-slate-400 transition hover:border-blue-500 hover:text-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <Copy size={18} />
@@ -961,7 +883,9 @@ Examples:
                             onClick={() =>
                               toggleFavorite(index)
                             }
-                            disabled={isRegenerating}
+                            disabled={
+                              isRegenerating
+                            }
                             className={`rounded-xl border bg-[#050814] p-3 transition disabled:cursor-not-allowed disabled:opacity-50 ${
                               result.favorite
                                 ? "border-pink-500 text-pink-500"
@@ -1017,7 +941,9 @@ Examples:
                             onClick={() =>
                               regenerateTitle(index)
                             }
-                            disabled={isRegenerating}
+                            disabled={
+                              isRegenerating
+                            }
                             className="rounded-xl border border-white/10 bg-[#050814] p-3 text-slate-400 transition hover:border-green-500 hover:text-green-400 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <RefreshCcw

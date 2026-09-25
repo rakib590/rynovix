@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Copy,
   RefreshCcw,
@@ -9,7 +9,12 @@ import {
   Lightbulb,
   Check,
 } from "lucide-react";
+
 import ToolLayout from "@/components/ai-tools/ToolLayout";
+import {
+  buildShortsPrompt,
+  buildShortsRegeneratePrompt,
+} from "@/lib/prompts/shorts";
 
 type ShortsIdeaResult = {
   title: string;
@@ -69,6 +74,15 @@ const categories = [
 
 const ideaCounts = ["5", "10", "15", "20"];
 
+const SHORTS_CREDIT_COSTS: Record<number, number> = {
+  5: 3,
+  10: 6,
+  15: 9,
+  20: 12,
+};
+
+const REGENERATE_CREDIT_COST = 2;
+
 export default function ShortsIdeasPage() {
   const [topic, setTopic] = useState("");
   const [keywords, setKeywords] = useState("");
@@ -79,107 +93,103 @@ export default function ShortsIdeasPage() {
   const [ideaCount, setIdeaCount] = useState("5");
   const [creativity, setCreativity] = useState(70);
 
+  const [credits, setCredits] = useState(0);
+
   const [loading, setLoading] = useState(false);
-  const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(
-    null
-  );
+  const [regeneratingIndex, setRegeneratingIndex] =
+    useState<number | null>(null);
   const [error, setError] = useState("");
   const [results, setResults] = useState<ShortsIdeaResult[]>([]);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
 
+  const selectedIdeaCount = Number(ideaCount);
+
+  const generateCreditCost =
+    SHORTS_CREDIT_COSTS[selectedIdeaCount] ?? 0;
+
   const clamp = (value: number) =>
     Math.max(0, Math.min(100, Number(value) || 0));
 
+  // ============================================================
+  // LOAD CREDITS
+  // ============================================================
+
+  useEffect(() => {
+    async function loadCredits() {
+      try {
+        const response = await fetch("/api/credits");
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          setCredits(Number(data.credits ?? 0));
+        }
+      } catch (error) {
+        console.error("Failed to load credits:", error);
+      }
+    }
+
+    loadCredits();
+  }, []);
+
+  // ============================================================
+  // UPDATE CREDITS
+  // ============================================================
+
+  const updateCreditsFromResponse = (data: any) => {
+    if (typeof data?.credits === "number") {
+      setCredits(data.credits);
+    } else if (typeof data?.remainingCredits === "number") {
+      setCredits(data.remainingCredits);
+    }
+  };
+
+  // ============================================================
+  // SANITIZE RESULT
+  // ============================================================
+
   const sanitizeResult = (item: any): ShortsIdeaResult => ({
-    title: String(item?.title || "Untitled Shorts Idea").trim(),
+    title: String(
+      item?.title || "Untitled Shorts Idea"
+    ).trim(),
+
     hook: String(item?.hook || "").trim(),
+
     concept: String(item?.concept || "").trim(),
+
     structure: String(item?.structure || "").trim(),
+
     cta: String(item?.cta || "").trim(),
+
     score: clamp(item?.score),
+
     viral: clamp(item?.viral),
+
     engagement: clamp(item?.engagement),
+
     favorite: false,
   });
 
+  // ============================================================
+  // BUILD MAIN PROMPT
+  // ============================================================
+
   const buildPrompt = (count: number) => {
-    return `
-You are an expert YouTube Shorts content strategist.
-
-Generate exactly ${count} UNIQUE and practical YouTube Shorts ideas.
-
-USER INPUT
-Topic: ${topic.trim()}
-Keywords: ${keywords.trim() || "None"}
-Language: ${language}
-Tone: ${tone}
-Target Audience: ${audience}
-Category: ${category}
-Creativity Level: ${creativity}/100
-
-IMPORTANT LANGUAGE RULES:
-1. If Language is "🌐 Auto Detect", detect the primary language of the user's Topic and Keywords.
-2. If a specific Language is selected, use ONLY that selected language for the main content.
-3. English = natural fluent English.
-4. বাংলা = natural Bengali using Bengali script.
-5. हिन्दी = natural Hindi using Devanagari script.
-6. Spanish = natural fluent Spanish.
-7. French = natural fluent French.
-8. German = natural fluent German.
-9. Arabic = natural fluent Arabic.
-10. If the user's input naturally mixes languages, preserve natural mixed-language expressions where appropriate.
-11. Do NOT translate word-for-word.
-12. Make every idea sound natural and creator-friendly.
-13. Common technical terms may remain in English when that sounds natural.
-
-SHORTS REQUIREMENTS:
-- Ideas must be specifically suitable for YouTube Shorts.
-- Prioritize a strong first 1–2 second hook.
-- Make concepts easy to understand quickly.
-- Prioritize curiosity, fast payoff, visual potential, and strong retention.
-- Use loopability when appropriate.
-- Make each idea meaningfully different.
-- Avoid repetitive variations of the same idea.
-- Avoid misleading clickbait.
-- Ideas should be realistic for a creator to produce.
-- Do NOT write full scripts.
-- Keep the structure concise and actionable.
-- CTA should be short and natural.
-
-FIELD DEFINITIONS:
-- title = the name/title of the Shorts idea.
-- hook = a powerful first 1–2 second opening hook.
-- concept = what the Short is about and what happens.
-- structure = concise beginning-to-end flow of the Short.
-- cta = a natural ending call-to-action.
-
-SCORE DEFINITIONS:
-- score = estimated overall idea quality from 0–100.
-- viral = estimated viral potential from 0–100. This is NOT a guarantee and is NOT real-time trend data.
-- engagement = estimated audience engagement potential from 0–100.
-
-Return ONLY valid JSON.
-Do not use markdown.
-Do not add explanations outside JSON.
-
-Required JSON format:
-{
-  "results": [
-    {
-      "title": "Shorts idea title",
-      "hook": "Strong first 1-2 second hook",
-      "concept": "What happens in the Short",
-      "structure": "Brief beginning-to-end structure",
-      "cta": "Short natural CTA",
-      "score": 95,
-      "viral": 93,
-      "engagement": 94
-    }
-  ]
-}
-`;
+    return buildShortsPrompt({
+      topic,
+      keywords,
+      language,
+      tone,
+      audience,
+      category,
+      creativity,
+      count,
+    });
   };
+
+  // ============================================================
+  // GENERATE IDEAS
+  // ============================================================
 
   const generateIdeas = async () => {
     if (!topic.trim()) {
@@ -187,10 +197,18 @@ Required JSON format:
       return;
     }
 
+    if (credits < generateCreditCost) {
+      setError(
+        `You need ${generateCreditCost} credits to generate ${selectedIdeaCount} ideas.`
+      );
+      return;
+    }
+
     setLoading(true);
     setError("");
     setCopiedIndex(null);
     setCopiedAll(false);
+    setResults([]);
 
     try {
       const response = await fetch("/api/ai", {
@@ -199,16 +217,23 @@ Required JSON format:
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          prompt: buildPrompt(Number(ideaCount)),
+          prompt: buildPrompt(selectedIdeaCount),
           json: true,
+          toolId: "shorts-ideas",
+          count: selectedIdeaCount,
+          action: "generate",
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok || !data?.success) {
-        throw new Error(data?.error || "Failed to generate Shorts ideas.");
+        throw new Error(
+          data?.error || "Failed to generate Shorts ideas."
+        );
       }
+
+      updateCreditsFromResponse(data);
 
       let parsed: any;
 
@@ -218,19 +243,25 @@ Required JSON format:
             ? JSON.parse(data.result)
             : data.result;
       } catch {
-        throw new Error("AI returned invalid JSON. Please try again.");
+        throw new Error(
+          "AI returned invalid JSON. Please try again."
+        );
       }
 
       if (!Array.isArray(parsed?.results)) {
-        throw new Error("AI returned an unexpected result format.");
+        throw new Error(
+          "AI returned an unexpected result format."
+        );
       }
 
       const ideas = parsed.results
-        .slice(0, Number(ideaCount))
+        .slice(0, selectedIdeaCount)
         .map(sanitizeResult);
 
       if (!ideas.length) {
-        throw new Error("No Shorts ideas were generated.");
+        throw new Error(
+          "No Shorts ideas were generated."
+        );
       }
 
       setResults(ideas);
@@ -242,51 +273,127 @@ Required JSON format:
     }
   };
 
+  // ============================================================
+  // GENERATE AGAIN
+  // Same count-based credit cost as normal Generate
+  // 5 = 3 | 10 = 6 | 15 = 9 | 20 = 12
+  // ============================================================
+
+  const generateAgain = async () => {
+    if (!topic.trim()) {
+      setError("Please enter a topic first.");
+      return;
+    }
+
+    if (credits < generateCreditCost) {
+      setError(
+        `You need ${generateCreditCost} credits to generate ${selectedIdeaCount} ideas again.`
+      );
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setCopiedIndex(null);
+    setCopiedAll(false);
+    setResults([]);
+
+    try {
+      const response = await fetch("/api/ai", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: buildPrompt(selectedIdeaCount),
+          json: true,
+          toolId: "shorts-ideas",
+          count: selectedIdeaCount,
+          action: "generate",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data?.success) {
+        throw new Error(
+          data?.error || "Failed to generate ideas again."
+        );
+      }
+
+      updateCreditsFromResponse(data);
+
+      let parsed: any;
+
+      try {
+        parsed =
+          typeof data.result === "string"
+            ? JSON.parse(data.result)
+            : data.result;
+      } catch {
+        throw new Error(
+          "AI returned invalid JSON. Please try again."
+        );
+      }
+
+      if (!Array.isArray(parsed?.results)) {
+        throw new Error(
+          "AI returned an unexpected result format."
+        );
+      }
+
+      const ideas = parsed.results
+        .slice(0, selectedIdeaCount)
+        .map(sanitizeResult);
+
+      if (!ideas.length) {
+        throw new Error(
+          "No Shorts ideas were generated."
+        );
+      }
+
+      setResults(ideas);
+    } catch (err: any) {
+      console.error("GENERATE AGAIN ERROR:", err);
+      setError(
+        err?.message || "Failed to generate ideas again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================================
+  // REGENERATE INDIVIDUAL IDEA
+  // Always 2 credits
+  // ============================================================
+
   const regenerateIdea = async (index: number) => {
     if (!topic.trim()) return;
+
+    if (credits < REGENERATE_CREDIT_COST) {
+      setError(
+        `You need ${REGENERATE_CREDIT_COST} credits to regenerate an idea.`
+      );
+      return;
+    }
 
     setRegeneratingIndex(index);
     setError("");
 
     try {
-      const prompt = `
-You are an expert YouTube Shorts content strategist.
-
-Create ONE completely new YouTube Shorts idea.
-
-Topic: ${topic.trim()}
-Keywords: ${keywords.trim() || "None"}
-Language: ${language}
-Tone: ${tone}
-Target Audience: ${audience}
-Category: ${category}
-Creativity: ${creativity}/100
-
-The new idea MUST be different from these existing ideas:
-${results.map((item, i) => `${i + 1}. ${item.title}`).join("\n")}
-
-Language rules:
-- If Language is "🌐 Auto Detect", detect the primary language of the Topic and Keywords.
-- If a specific language is selected, use ONLY that language for the main content.
-- বাংলা must use Bengali script.
-- हिन्दी must use Devanagari script.
-- Keep natural mixed-language expressions when appropriate.
-
-Return ONLY valid JSON in this exact format:
-{
-  "title": "Shorts idea title",
-  "hook": "Strong first 1-2 second hook",
-  "concept": "What happens in the Short",
-  "structure": "Brief beginning-to-end structure",
-  "cta": "Short natural CTA",
-  "score": 95,
-  "viral": 93,
-  "engagement": 94
-}
-
-Do not write a full script.
-Do not use markdown.
-`;
+      const prompt = buildShortsRegeneratePrompt({
+        topic,
+        keywords,
+        language,
+        tone,
+        audience,
+        category,
+        creativity,
+        existingTitles: results.map(
+          (item) => item.title
+        ),
+      });
 
       const response = await fetch("/api/ai", {
         method: "POST",
@@ -296,14 +403,21 @@ Do not use markdown.
         body: JSON.stringify({
           prompt,
           json: true,
+          toolId: "shorts-ideas",
+          count: 1,
+          action: "regenerate",
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok || !data?.success) {
-        throw new Error(data?.error || "Failed to regenerate idea.");
+        throw new Error(
+          data?.error || "Failed to regenerate idea."
+        );
       }
+
+      updateCreditsFromResponse(data);
 
       let parsed: any;
 
@@ -319,25 +433,49 @@ Do not use markdown.
       const newIdea = sanitizeResult(parsed);
 
       setResults((current) =>
-        current.map((item, i) => (i === index ? newIdea : item))
+        current.map((item, i) =>
+          i === index ? newIdea : item
+        )
       );
     } catch (err: any) {
-      console.error("REGENERATE SHORTS IDEA ERROR:", err);
-      setError(err?.message || "Failed to regenerate idea.");
+      console.error(
+        "REGENERATE SHORTS IDEA ERROR:",
+        err
+      );
+
+      setError(
+        err?.message || "Failed to regenerate idea."
+      );
     } finally {
       setRegeneratingIndex(null);
     }
   };
 
+  // ============================================================
+  // FAVORITE
+  // ============================================================
+
   const toggleFavorite = (index: number) => {
     setResults((current) =>
       current.map((item, i) =>
-        i === index ? { ...item, favorite: !item.favorite } : item
+        i === index
+          ? {
+              ...item,
+              favorite: !item.favorite,
+            }
+          : item
       )
     );
   };
 
-  const formatIdea = (idea: ShortsIdeaResult, index: number) => {
+  // ============================================================
+  // FORMAT IDEA
+  // ============================================================
+
+  const formatIdea = (
+    idea: ShortsIdeaResult,
+    index: number
+  ) => {
     return `Idea ${index + 1}
 
 Title:
@@ -360,32 +498,55 @@ Viral Potential: ${idea.viral}/100
 Engagement: ${idea.engagement}/100`;
   };
 
-  const copyIdea = async (idea: ShortsIdeaResult, index: number) => {
+  // ============================================================
+  // COPY IDEA
+  // ============================================================
+
+  const copyIdea = async (
+    idea: ShortsIdeaResult,
+    index: number
+  ) => {
     try {
-      await navigator.clipboard.writeText(formatIdea(idea, index));
+      await navigator.clipboard.writeText(
+        formatIdea(idea, index)
+      );
 
       setCopiedIndex(index);
 
       setTimeout(() => {
-        setCopiedIndex((current) => (current === index ? null : current));
+        setCopiedIndex((current) =>
+          current === index ? null : current
+        );
       }, 1800);
     } catch {
       setError("Failed to copy idea.");
     }
   };
 
+  // ============================================================
+  // COPY ALL
+  // ============================================================
+
   const copyAllIdeas = async () => {
     if (!results.length) return;
 
     try {
       const text = results
-        .map((idea, index) => formatIdea(idea, index))
-        .join("\n\n------------------------------\n\n");
+        .map((idea, index) =>
+          formatIdea(idea, index)
+        )
+        .join(
+          "\n\n------------------------------\n\n"
+        );
 
       await navigator.clipboard.writeText(text);
 
       setCopiedAll(true);
-      setTimeout(() => setCopiedAll(false), 1800);
+
+      setTimeout(
+        () => setCopiedAll(false),
+        1800
+      );
     } catch {
       setError("Failed to copy all ideas.");
     }
@@ -393,7 +554,11 @@ Engagement: ${idea.engagement}/100`;
 
   const bestScore =
     results.length > 0
-      ? Math.max(...results.map((result) => result.score))
+      ? Math.max(
+          ...results.map(
+            (result) => result.score
+          )
+        )
       : -1;
 
   return (
@@ -402,14 +567,18 @@ Engagement: ${idea.engagement}/100`;
       description="Generate engaging and viral-ready YouTube Shorts ideas powered by AI."
     >
       <div className="grid min-w-0 gap-5 sm:gap-6 lg:gap-8 xl:grid-cols-[420px_minmax(0,1fr)]">
-        {/* =========================================
-            LEFT — GENERATOR
-        ========================================= */}
+        {/* LEFT — GENERATOR */}
 
         <div className="min-w-0 rounded-2xl border border-white/10 bg-[#050814] p-4 sm:rounded-3xl sm:p-6">
-          <h2 className="mb-5 text-lg font-bold text-white sm:mb-6 sm:text-xl">
-            Generator
-          </h2>
+          <div className="mb-5 flex items-center justify-between gap-3 sm:mb-6">
+            <h2 className="text-lg font-bold text-white sm:text-xl">
+              Generator
+            </h2>
+
+            <span className="shrink-0 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-400">
+              {credits} Credits
+            </span>
+          </div>
 
           {/* TOPIC */}
 
@@ -442,7 +611,9 @@ Engagement: ${idea.engagement}/100`;
 
             <input
               value={keywords}
-              onChange={(e) => setKeywords(e.target.value)}
+              onChange={(e) =>
+                setKeywords(e.target.value)
+              }
               placeholder="e.g. AI, YouTube, automation"
               className="w-full rounded-xl border border-white/10 bg-[#0B1220] px-3.5 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/30 sm:px-4"
             />
@@ -457,7 +628,9 @@ Engagement: ${idea.engagement}/100`;
 
             <select
               value={language}
-              onChange={(e) => setLanguage(e.target.value)}
+              onChange={(e) =>
+                setLanguage(e.target.value)
+              }
               className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-3.5 py-3 text-sm text-white outline-none focus:border-blue-500/60 sm:px-4"
             >
               {languages.map((item) => (
@@ -477,7 +650,9 @@ Engagement: ${idea.engagement}/100`;
 
             <select
               value={tone}
-              onChange={(e) => setTone(e.target.value)}
+              onChange={(e) =>
+                setTone(e.target.value)
+              }
               className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-3.5 py-3 text-sm text-white outline-none focus:border-blue-500/60 sm:px-4"
             >
               {tones.map((item) => (
@@ -497,7 +672,9 @@ Engagement: ${idea.engagement}/100`;
 
             <select
               value={audience}
-              onChange={(e) => setAudience(e.target.value)}
+              onChange={(e) =>
+                setAudience(e.target.value)
+              }
               className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-3.5 py-3 text-sm text-white outline-none focus:border-blue-500/60 sm:px-4"
             >
               {audiences.map((item) => (
@@ -517,7 +694,9 @@ Engagement: ${idea.engagement}/100`;
 
             <select
               value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              onChange={(e) =>
+                setCategory(e.target.value)
+              }
               className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-3.5 py-3 text-sm text-white outline-none focus:border-blue-500/60 sm:px-4"
             >
               {categories.map((item) => (
@@ -537,7 +716,9 @@ Engagement: ${idea.engagement}/100`;
 
             <select
               value={ideaCount}
-              onChange={(e) => setIdeaCount(e.target.value)}
+              onChange={(e) =>
+                setIdeaCount(e.target.value)
+              }
               className="w-full min-w-0 rounded-xl border border-white/10 bg-[#0B1220] px-3.5 py-3 text-sm text-white outline-none focus:border-blue-500/60 sm:px-4"
             >
               {ideaCounts.map((item) => (
@@ -567,7 +748,11 @@ Engagement: ${idea.engagement}/100`;
               max="100"
               step="1"
               value={creativity}
-              onChange={(e) => setCreativity(Number(e.target.value))}
+              onChange={(e) =>
+                setCreativity(
+                  Number(e.target.value)
+                )
+              }
               className="w-full accent-blue-500"
             />
 
@@ -575,6 +760,29 @@ Engagement: ${idea.engagement}/100`;
               <span>Focused</span>
               <span>Creative</span>
             </div>
+          </div>
+
+          {/* CREDIT INFO */}
+
+          <div className="mt-4 rounded-xl border border-blue-500/10 bg-blue-500/[0.04] px-3.5 py-3 text-xs text-slate-400">
+            Generate {selectedIdeaCount} ideas ={" "}
+            <span className="font-semibold text-blue-400">
+              {generateCreditCost} credits
+            </span>
+
+            <br />
+
+            Generate Again ={" "}
+            <span className="font-semibold text-purple-400">
+              {generateCreditCost} credits
+            </span>
+
+            <br />
+
+            Individual Regenerate ={" "}
+            <span className="font-semibold text-emerald-400">
+              {REGENERATE_CREDIT_COST} credits
+            </span>
           </div>
 
           {/* ERROR */}
@@ -590,26 +798,34 @@ Engagement: ${idea.engagement}/100`;
           <button
             type="button"
             onClick={generateIdeas}
-            disabled={loading || !topic.trim()}
+            disabled={
+              loading ||
+              !topic.trim() ||
+              credits < generateCreditCost
+            }
             className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:scale-[1.01] hover:shadow-blue-500/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 sm:mt-6"
           >
             {loading ? (
               <>
-                <RefreshCcw size={18} className="shrink-0 animate-spin" />
+                <RefreshCcw
+                  size={18}
+                  className="shrink-0 animate-spin"
+                />
                 Generating...
               </>
             ) : (
               <>
-                <Sparkles size={18} className="shrink-0" />
-                Generate Ideas
+                <Sparkles
+                  size={18}
+                  className="shrink-0"
+                />
+                Generate Ideas • {generateCreditCost} Credits
               </>
             )}
           </button>
         </div>
 
-        {/* =========================================
-            RIGHT — RESULTS
-        ========================================= */}
+        {/* RIGHT — RESULTS */}
 
         <div className="min-w-0 rounded-2xl border border-white/10 bg-[#050814] p-4 sm:rounded-3xl sm:p-6">
           {/* HEADER */}
@@ -636,21 +852,36 @@ Engagement: ${idea.engagement}/100`;
                   onClick={copyAllIdeas}
                   className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-blue-500/30 hover:bg-blue-500/10 hover:text-white"
                 >
-                  {copiedAll ? <Check size={15} /> : <Copy size={15} />}
+                  {copiedAll ? (
+                    <Check size={15} />
+                  ) : (
+                    <Copy size={15} />
+                  )}
 
-                  {copiedAll ? "Copied" : "Copy All"}
+                  {copiedAll
+                    ? "Copied"
+                    : "Copy All"}
                 </button>
+
+                {/* GENERATE AGAIN */}
 
                 <button
                   type="button"
-                  onClick={generateIdeas}
-                  disabled={loading}
-                  title="Generate Again"
+                  onClick={generateAgain}
+                  disabled={
+                    loading ||
+                    credits < generateCreditCost
+                  }
+                  title={`Generate Again • ${generateCreditCost} Credits`}
                   className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-300 transition hover:border-blue-500/30 hover:bg-blue-500/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <RefreshCcw
                     size={16}
-                    className={loading ? "animate-spin" : ""}
+                    className={
+                      loading
+                        ? "animate-spin"
+                        : ""
+                    }
                   />
                 </button>
               </div>
@@ -661,7 +892,10 @@ Engagement: ${idea.engagement}/100`;
 
           {results.length === 0 ? (
             <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 px-5 py-10 sm:min-h-[520px]">
-              <Lightbulb size={40} className="text-blue-400 sm:h-[42px] sm:w-[42px]" />
+              <Lightbulb
+                size={40}
+                className="text-blue-400 sm:h-[42px] sm:w-[42px]"
+              />
 
               <h3 className="mt-5 text-lg font-semibold text-white sm:text-xl">
                 No Ideas Yet
@@ -673,176 +907,202 @@ Engagement: ${idea.engagement}/100`;
             </div>
           ) : (
             <div className="space-y-4 sm:space-y-5">
-              {results.map((result, index) => {
-                const isBest = result.score === bestScore;
-                const isRegenerating = regeneratingIndex === index;
+              {results.map(
+                (result, index) => {
+                  const isBest =
+                    result.score === bestScore;
 
-                return (
-                  <div
-                    key={`${index}-${result.title}`}
-                    className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-[#0B1220] p-4 transition-all duration-300 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/10 sm:p-6"
-                  >
-                    {/* CARD HEADER */}
+                  const isRegenerating =
+                    regeneratingIndex === index;
 
-                    <div className="flex min-w-0 flex-col gap-3">
-                      {/* NUMBER + BEST */}
+                  return (
+                    <div
+                      key={`${index}-${result.title}`}
+                      className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-[#0B1220] p-4 transition-all duration-300 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/10 sm:p-6"
+                    >
+                      {/* CARD HEADER */}
 
-                      <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">
-                          Idea {index + 1}
-                        </span>
-
-                        {isBest && (
-                          <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-amber-300 sm:px-2.5 sm:text-[10px]">
-                            🏆 BEST
+                      <div className="flex min-w-0 flex-col gap-3">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">
+                            Idea {index + 1}
                           </span>
-                        )}
-                      </div>
 
-                      {/* SCORE BADGES */}
-
-                      <div className="flex min-w-0 flex-wrap gap-2">
-                        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-emerald-400 sm:px-3 sm:text-xs">
-                          AI Score {result.score}%
+                          {isBest && (
+                            <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-amber-300 sm:px-2.5 sm:text-[10px]">
+                              🏆 BEST
+                            </span>
+                          )}
                         </div>
 
-                        <div className="rounded-lg border border-purple-500/20 bg-purple-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-purple-400 sm:px-3 sm:text-xs">
-                          Viral {result.viral}/100
+                        <div className="flex min-w-0 flex-wrap gap-2">
+                          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-emerald-400 sm:px-3 sm:text-xs">
+                            AI Score{" "}
+                            {result.score}%
+                          </div>
+
+                          <div className="rounded-lg border border-purple-500/20 bg-purple-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-purple-400 sm:px-3 sm:text-xs">
+                            Viral {result.viral}/100
+                          </div>
+
+                          <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-blue-400 sm:px-3 sm:text-xs">
+                            Engagement{" "}
+                            {result.engagement}/100
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* TITLE */}
+
+                      <h3 className="mt-4 break-words text-xl font-bold leading-tight text-white sm:text-2xl">
+                        {result.title}
+                      </h3>
+
+                      {/* HOOK */}
+
+                      <div className="mt-4 overflow-hidden rounded-xl border border-purple-500/20 bg-purple-500/[0.06] p-3.5 sm:mt-5 sm:p-4">
+                        <div className="mb-2 flex items-center gap-2">
+                          <Sparkles
+                            size={15}
+                            className="shrink-0 text-purple-400"
+                          />
+
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400 sm:text-xs">
+                            Hook
+                          </span>
                         </div>
 
-                        <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-blue-400 sm:px-3 sm:text-xs">
-                          Engagement {result.engagement}/100
+                        <p className="break-words text-sm leading-6 text-slate-200">
+                          {result.hook}
+                        </p>
+                      </div>
+
+                      {/* CONTENT */}
+
+                      <div className="mt-3 grid min-w-0 gap-3 sm:mt-4 sm:gap-4 md:grid-cols-2">
+                        <div className="min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#080D18] p-3.5 sm:p-4">
+                          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-blue-400 sm:text-xs">
+                            Concept
+                          </p>
+
+                          <p className="break-words text-sm leading-6 text-slate-300">
+                            {result.concept}
+                          </p>
+                        </div>
+
+                        <div className="min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#080D18] p-3.5 sm:p-4">
+                          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-cyan-400 sm:text-xs">
+                            Structure
+                          </p>
+
+                          <p className="break-words text-sm leading-6 text-slate-300">
+                            {result.structure}
+                          </p>
+                        </div>
+
+                        <div className="min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#080D18] p-3.5 sm:p-4 md:col-span-2">
+                          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-emerald-400 sm:text-xs">
+                            CTA
+                          </p>
+
+                          <p className="break-words text-sm leading-6 text-slate-300">
+                            {result.cta}
+                          </p>
                         </div>
                       </div>
-                    </div>
 
-                    {/* TITLE */}
+                      {/* ACTIONS */}
 
-                    <h3 className="mt-4 break-words text-xl font-bold leading-tight text-white sm:text-2xl">
-                      {result.title}
-                    </h3>
+                      <div className="mt-4 flex items-center justify-end gap-2 border-t border-white/5 pt-3 sm:mt-5 sm:pt-4">
+                        {/* COPY */}
 
-                    {/* HOOK */}
-
-                    <div className="mt-4 overflow-hidden rounded-xl border border-purple-500/20 bg-purple-500/[0.06] p-3.5 sm:mt-5 sm:p-4">
-                      <div className="mb-2 flex items-center gap-2">
-                        <Sparkles
-                          size={15}
-                          className="shrink-0 text-purple-400"
-                        />
-
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400 sm:text-xs">
-                          Hook
-                        </span>
-                      </div>
-
-                      <p className="break-words text-sm leading-6 text-slate-200">
-                        {result.hook}
-                      </p>
-                    </div>
-
-                    {/* CONTENT */}
-
-                    <div className="mt-3 grid min-w-0 gap-3 sm:mt-4 sm:gap-4 md:grid-cols-2">
-                      {/* CONCEPT */}
-
-                      <div className="min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#080D18] p-3.5 sm:p-4">
-                        <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-blue-400 sm:text-xs">
-                          Concept
-                        </p>
-
-                        <p className="break-words text-sm leading-6 text-slate-300">
-                          {result.concept}
-                        </p>
-                      </div>
-
-                      {/* STRUCTURE */}
-
-                      <div className="min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#080D18] p-3.5 sm:p-4">
-                        <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-cyan-400 sm:text-xs">
-                          Structure
-                        </p>
-
-                        <p className="break-words text-sm leading-6 text-slate-300">
-                          {result.structure}
-                        </p>
-                      </div>
-
-                      {/* CTA */}
-
-                      <div className="min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#080D18] p-3.5 sm:p-4 md:col-span-2">
-                        <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-emerald-400 sm:text-xs">
-                          CTA
-                        </p>
-
-                        <p className="break-words text-sm leading-6 text-slate-300">
-                          {result.cta}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* ACTIONS */}
-
-                    <div className="mt-4 flex items-center justify-end gap-2 border-t border-white/5 pt-3 sm:mt-5 sm:pt-4">
-                      {/* COPY */}
-
-                      <button
-                        type="button"
-                        onClick={() => copyIdea(result, index)}
-                        disabled={isRegenerating}
-                        title="Copy Idea"
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:border-blue-500/30 hover:bg-blue-500/10 hover:text-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {copiedIndex === index ? (
-                          <Check size={17} />
-                        ) : (
-                          <Copy size={17} />
-                        )}
-                      </button>
-
-                      {/* FAVORITE */}
-
-                      <button
-                        type="button"
-                        onClick={() => toggleFavorite(index)}
-                        disabled={isRegenerating}
-                        title={
-                          result.favorite
-                            ? "Remove Favorite"
-                            : "Add to Favorites"
-                        }
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                          result.favorite
-                            ? "border-pink-500/30 bg-pink-500/10 text-pink-400"
-                            : "border-white/10 bg-white/[0.03] text-slate-400 hover:border-pink-500/30 hover:bg-pink-500/10 hover:text-pink-400"
-                        }`}
-                      >
-                        <Heart
-                          size={17}
-                          fill={result.favorite ? "currentColor" : "none"}
-                        />
-                      </button>
-
-                      {/* REGENERATE */}
-
-                      <button
-                        type="button"
-                        onClick={() => regenerateIdea(index)}
-                        disabled={isRegenerating}
-                        title="Regenerate Idea"
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:border-purple-500/30 hover:bg-purple-500/10 hover:text-purple-400 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <RefreshCcw
-                          size={17}
-                          className={
-                            isRegenerating ? "animate-spin" : ""
+                        <button
+                          type="button"
+                          onClick={() =>
+                            copyIdea(
+                              result,
+                              index
+                            )
                           }
-                        />
-                      </button>
+                          disabled={
+                            isRegenerating
+                          }
+                          title="Copy Idea"
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:border-blue-500/30 hover:bg-blue-500/10 hover:text-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {copiedIndex ===
+                          index ? (
+                            <Check size={17} />
+                          ) : (
+                            <Copy size={17} />
+                          )}
+                        </button>
+
+                        {/* FAVORITE */}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            toggleFavorite(
+                              index
+                            )
+                          }
+                          disabled={
+                            isRegenerating
+                          }
+                          title={
+                            result.favorite
+                              ? "Remove Favorite"
+                              : "Add to Favorites"
+                          }
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                            result.favorite
+                              ? "border-pink-500/30 bg-pink-500/10 text-pink-400"
+                              : "border-white/10 bg-white/[0.03] text-slate-400 hover:border-pink-500/30 hover:bg-pink-500/10 hover:text-pink-400"
+                          }`}
+                        >
+                          <Heart
+                            size={17}
+                            fill={
+                              result.favorite
+                                ? "currentColor"
+                                : "none"
+                            }
+                          />
+                        </button>
+
+                        {/* INDIVIDUAL REGENERATE */}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            regenerateIdea(
+                              index
+                            )
+                          }
+                          disabled={
+                            isRegenerating ||
+                            loading ||
+                            credits <
+                              REGENERATE_CREDIT_COST
+                          }
+                          title={`Regenerate Idea • ${REGENERATE_CREDIT_COST} Credits`}
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:border-purple-500/30 hover:bg-purple-500/10 hover:text-purple-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <RefreshCcw
+                            size={17}
+                            className={
+                              isRegenerating
+                                ? "animate-spin"
+                                : ""
+                            }
+                          />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                }
+              )}
             </div>
           )}
 
@@ -850,8 +1110,8 @@ Engagement: ${idea.engagement}/100`;
 
           {results.length > 0 && (
             <p className="mt-4 px-2 text-center text-[10px] leading-5 text-slate-600 sm:mt-5 sm:text-xs">
-              Viral Potential and Engagement are AI estimates, not real-time
-              analytics or guarantees.
+              Viral Potential and Engagement are AI estimates,
+              not real-time analytics or guarantees.
             </p>
           )}
         </div>

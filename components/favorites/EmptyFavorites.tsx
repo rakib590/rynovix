@@ -17,14 +17,14 @@ export default function EmptyFavorites() {
 
       {/* Title */}
       <h2 className="mt-6 text-2xl font-bold text-white">
-        No Favorite Tools Yet
+        No Favorite Generations Yet
       </h2>
 
       {/* Description */}
       <p className="mx-auto mt-3 max-w-lg text-gray-400">
-        You haven't added any AI tools to your favorites yet.
-        Start exploring the AI Toolbox and save your most-used
-        tools for quick access.
+        You haven't added any AI generations to your favorites yet.
+        Start using the AI Toolbox and save your favorite results
+        for quick access later.
       </p>
 
       {/* Button */}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   History,
   Star,
@@ -7,37 +8,133 @@ import {
   Bot,
 } from "lucide-react";
 
-const stats = [
-  {
-    title: "Total History",
-    value: "0",
-    icon: History,
-    color: "blue",
-  },
-  {
-    title: "Favorites",
-    value: "0",
-    icon: Star,
-    color: "yellow",
-  },
-  {
-    title: "Today",
-    value: "0",
-    icon: CalendarDays,
-    color: "green",
-  },
-  {
-    title: "AI Tools Used",
-    value: "0",
-    icon: Bot,
-    color: "purple",
-  },
-];
+type DashboardStats = {
+  totalGenerations: number;
+  totalSEOChecks: number;
+  averageSEOScore: number;
+  creditsUsed: number;
+  creditsRemaining: number;
+  currentPlan: string;
+};
 
 export default function HistoryStats() {
+  const [stats, setStats] =
+    useState<DashboardStats>({
+      totalGenerations: 0,
+      totalSEOChecks: 0,
+      averageSEOScore: 0,
+      creditsUsed: 0,
+      creditsRemaining: 0,
+      currentPlan: "Free",
+    });
+
+  const [loading, setLoading] =
+    useState(true);
+
+  async function loadDashboard() {
+    try {
+      setLoading(true);
+
+      const res = await fetch(
+        "/api/dashboard",
+        {
+          cache: "no-store",
+        }
+      );
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setStats({
+          totalGenerations:
+            data.statistics
+              ?.totalGenerations ?? 0,
+
+          totalSEOChecks:
+            data.statistics
+              ?.totalSEOChecks ?? 0,
+
+          averageSEOScore:
+            data.statistics
+              ?.averageSEOScore ?? 0,
+
+          creditsUsed:
+            data.statistics
+              ?.creditsUsed ?? 0,
+
+          creditsRemaining:
+            data.statistics
+              ?.creditsRemaining ?? 0,
+
+          currentPlan:
+            data.statistics
+              ?.currentPlan ?? "Free",
+        });
+      }
+    } catch (error) {
+      console.error(
+        "Dashboard Stats Error:",
+        error
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadDashboard();
+
+    /*
+     * HistoryTable delete করার পর
+     * এই event পাঠাবে।
+     */
+    function handleHistoryUpdated() {
+      loadDashboard();
+    }
+
+    window.addEventListener(
+      "history-updated",
+      handleHistoryUpdated
+    );
+
+    return () => {
+      window.removeEventListener(
+        "history-updated",
+        handleHistoryUpdated
+      );
+    };
+  }, []);
+
+  const cards = [
+    {
+      title: "Total History",
+      value: stats.totalGenerations,
+      icon: History,
+      color: "blue",
+    },
+    {
+      title: "SEO Checks",
+      value: stats.totalSEOChecks,
+      icon: Star,
+      color: "yellow",
+    },
+    {
+      title: "Credits Used",
+      value: stats.creditsUsed,
+      icon: CalendarDays,
+      color: "green",
+    },
+    {
+      title: "Credits Left",
+      value: stats.creditsRemaining,
+      icon: Bot,
+      color: "purple",
+    },
+  ];
+
   return (
     <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
-      {stats.map((item) => {
+      {cards.map((item) => {
         const Icon = item.icon;
 
         const iconColor =
@@ -61,7 +158,9 @@ export default function HistoryStats() {
                 </p>
 
                 <h3 className="mt-3 text-3xl font-bold text-white">
-                  {item.value}
+                  {loading
+                    ? "..."
+                    : item.value}
                 </h3>
               </div>
 

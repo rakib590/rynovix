@@ -1,17 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Wand2,
   Copy,
   RefreshCcw,
-  Sparkles,
   Heart,
   FileText,
 } from "lucide-react";
 
 import ToolLayout from "@/components/ai-tools/ToolLayout";
+
+import {
+  buildScriptPrompt,
+  buildScriptRegeneratePrompt,
+} from "@/lib/prompts/script";
 
 type ScriptResult = {
   title: string;
@@ -40,9 +44,40 @@ export default function ScriptWriterPage() {
     useState<number | null>(null);
 
   const [error, setError] = useState("");
+  const [credits, setCredits] = useState<number | null>(null);
+
   const [results, setResults] = useState<ScriptResult[]>([]);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
+
+  // =========================================
+  // LOAD CREDITS
+  // =========================================
+
+  useEffect(() => {
+    async function loadCredits() {
+      try {
+        const response = await fetch("/api/credits");
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json();
+
+        if (typeof data.credits === "number") {
+          setCredits(data.credits);
+        }
+      } catch (error) {
+        console.error("Failed to load credits:", error);
+      }
+    }
+
+    loadCredits();
+  }, []);
+
+  // Script Writer = fixed 8 credits
+  const scriptCreditCost = 8;
 
   // =========================================
   // REGENERATE SINGLE SCRIPT
@@ -59,183 +94,19 @@ export default function ScriptWriterPage() {
     setError("");
 
     try {
-      const languageInstruction =
-        language === "🌐 Auto Detect"
-          ? `
-Detect the primary language of the user's Topic and Keywords.
-Write the complete new script in that same primary language.
-`
-          : `
-Write the complete new script in ${language}.
-`;
-
-      const prompt = `
-You are an expert professional YouTube script writer.
-
-Create ONE completely new and improved script variation.
-
-TOPIC:
-${topic}
-
-KEYWORDS:
-${keywords || "None"}
-
-SCRIPT TYPE:
-${scriptType}
-
-CATEGORY / NICHE:
-${category}
-
-TONE:
-${tone}
-
-TARGET AUDIENCE:
-${audience}
-
-VIDEO LENGTH:
-${length}
-
-CREATIVITY:
-${creativity}/100
-
-LANGUAGE:
-${language}
-
-LANGUAGE REQUIREMENTS:
-${languageInstruction}
-
-1. If Language is "🌐 Auto Detect", detect the primary language of the user's Topic and Keywords.
-2. If Language is explicitly selected, use ONLY that selected language for the main script.
-3. English → natural fluent English.
-4. বাংলা → natural Bengali using Bengali script.
-5. हिन्दी → natural Hindi using Devanagari script.
-6. Spanish → natural fluent Spanish.
-7. French → natural fluent French.
-8. German → natural fluent German.
-9. Arabic → natural fluent Arabic.
-10. If the user's input naturally mixes languages, preserve natural mixed expressions where appropriate.
-11. Do NOT translate word-for-word.
-12. The script must sound natural for a native speaker.
-13. The script must be ready for voice recording.
-14. Common technical terms may remain in English when that sounds natural.
-
-SCRIPT STRUCTURE:
-
-For YouTube Video:
-- Hook
-- Introduction
-- Main Content
-- Natural Transitions
-- Conclusion
-- CTA
-
-For Storytelling:
-- Opening Hook
-- Setup
-- Story Development
-- Turning Point
-- Climax
-- Ending
-- CTA
-
-For Tutorial:
-- Hook
-- Introduction
-- What viewers will learn
-- Step-by-step explanation
-- Tips / mistakes to avoid
-- Conclusion
-- CTA
-
-For Documentary:
-- Strong opening
-- Context
-- Main story
-- Important facts
-- Developments
-- Conclusion
-- CTA
-
-For Review:
-- Hook
-- Introduction
-- Overview
-- Key features
-- Pros
-- Cons
-- Verdict
-- CTA
-
-For Shorts:
-- Very strong first 1-2 seconds
-- Fast-paced main content
-- Strong ending
-- Short CTA
-
-For Promotional:
-- Hook
-- Problem
-- Solution
-- Benefits
-- Value proposition
-- CTA
-
-For Comedy / Funny:
-- Strong funny hook
-- Setup
-- Comedic development
-- Punchlines
-- Ending
-- CTA
-
-IMPORTANT:
-- Create exactly ONE new script.
-- Do not copy the current script.
-- Make the new version meaningfully different.
-- Do not create a random paragraph.
-- Write a real usable video script.
-- Use speaker-friendly sentences.
-- Use natural pacing.
-- Avoid repetitive sentences.
-- Avoid generic filler.
-- Make the opening hook highly engaging.
-- Make the ending memorable.
-- Match the selected Script Type.
-- Match the selected Category.
-- Match the selected Tone.
-- Match the selected Audience.
-- Match the selected Language.
-- Keep the script practical for voice recording.
-
-CURRENT SCRIPT TITLE:
-${currentScript.title}
-
-CURRENT SCRIPT:
-${currentScript.script}
-
-Return ONLY valid JSON.
-
-JSON format:
-{
-  "title": "Short video title",
-  "hook": "The strongest opening hook",
-  "script": "Complete ready-to-record script",
-  "score": 95,
-  "engagement": 93,
-  "structure": 94
-}
-
-SCORING:
-score = estimated overall script quality from 0-100.
-engagement = estimated viewer engagement potential from 0-100.
-structure = estimated script structure quality from 0-100.
-
-These are AI estimates, NOT actual YouTube analytics.
-
-Do not return markdown.
-Do not return explanations.
-Return valid JSON only.
-`;
+      const prompt = buildScriptRegeneratePrompt({
+        topic,
+        keywords,
+        language,
+        tone,
+        length,
+        audience,
+        category,
+        scriptType,
+        creativity,
+        currentTitle: currentScript.title,
+        currentScript: currentScript.script,
+      });
 
       const response = await fetch("/api/ai", {
         method: "POST",
@@ -245,6 +116,9 @@ Return valid JSON only.
         body: JSON.stringify({
           prompt,
           json: true,
+          toolId: "script-writer",
+          count: 1,
+          action: "regenerate",
         }),
       });
 
@@ -254,6 +128,10 @@ Return valid JSON only.
         throw new Error(
           data.error || "Failed to regenerate script."
         );
+      }
+
+      if (typeof data.credits === "number") {
+        setCredits(data.credits);
       }
 
       let parsed = data.result;
@@ -404,232 +282,17 @@ Return valid JSON only.
     setResults([]);
 
     try {
-      const languageInstruction =
-        language === "🌐 Auto Detect"
-          ? `
-Detect the primary language of the user's Topic and Keywords.
-Write all 5 scripts in that same primary language.
-`
-          : `
-Write all 5 scripts in ${language}.
-`;
-
-      const prompt = `
-You are an expert professional YouTube script writer.
-
-Generate exactly 5 UNIQUE high-quality script variations.
-
-TOPIC:
-${topic}
-
-KEYWORDS:
-${keywords || "None"}
-
-SCRIPT TYPE:
-${scriptType}
-
-CATEGORY / NICHE:
-${category}
-
-TONE:
-${tone}
-
-TARGET AUDIENCE:
-${audience}
-
-VIDEO LENGTH:
-${length}
-
-CREATIVITY:
-${creativity}/100
-
-LANGUAGE:
-${language}
-
-LANGUAGE REQUIREMENTS:
-${languageInstruction}
-
-1. If Language is "🌐 Auto Detect", detect the primary language of the user's Topic and Keywords.
-2. If Language is explicitly selected, use ONLY that selected language for the main scripts.
-3. English → natural fluent English.
-4. বাংলা → natural Bengali using Bengali script.
-5. हिन्दी → natural Hindi using Devanagari script.
-6. Spanish → natural fluent Spanish.
-7. French → natural fluent French.
-8. German → natural fluent German.
-9. Arabic → natural fluent Arabic.
-10. If the user's input naturally mixes languages, preserve natural mixed expressions where appropriate.
-11. Do NOT translate word-for-word.
-12. All scripts must sound natural for native speakers.
-13. All scripts must be ready for voice recording.
-14. Common technical terms may remain in English when natural.
-
-SCRIPT TYPE VS CATEGORY:
-- Script Type describes the FORMAT of the video/script.
-- Category describes the SUBJECT or NICHE of the video.
-- Tone describes HOW the script should sound.
-- Target Audience describes WHO the script is written for.
-
-SCRIPT TYPES:
-- YouTube Video
-- Storytelling
-- Tutorial
-- Documentary
-- Review
-- Shorts
-- Promotional
-- Comedy / Funny
-
-CATEGORIES:
-- General
-- Technology
-- Education
-- Gaming
-- Entertainment
-- Business
-- Lifestyle
-- News
-- How To & Style
-- Travel
-- Comedy
-
-TONES:
-- Engaging
-- Professional
-- Friendly
-- Casual
-- Storytelling
-- Dramatic
-- Funny
-- Viral
-
-TARGET AUDIENCE:
-- Everyone
-- Beginners
-- Students
-- Professionals
-- Kids
-
-STRUCTURE:
-
-For YouTube Video:
-Hook
-Introduction
-Main Content
-Natural Transitions
-Conclusion
-CTA
-
-For Storytelling:
-Opening Hook
-Setup
-Story Development
-Turning Point
-Climax
-Ending
-CTA
-
-For Tutorial:
-Hook
-Introduction
-What viewers will learn
-Step-by-step explanation
-Tips / mistakes to avoid
-Conclusion
-CTA
-
-For Documentary:
-Strong opening
-Context
-Main story
-Important facts
-Developments
-Conclusion
-CTA
-
-For Review:
-Hook
-Introduction
-Overview
-Key features
-Pros
-Cons
-Verdict
-CTA
-
-For Shorts:
-Strong first 1-2 seconds
-Fast-paced content
-Strong ending
-Short CTA
-
-For Promotional:
-Hook
-Problem
-Solution
-Benefits
-Value proposition
-CTA
-
-For Comedy / Funny:
-Funny Hook
-Setup
-Comedic development
-Punchlines
-Ending
-CTA
-
-IMPORTANT:
-- Generate exactly 5 unique scripts.
-- Every script must feel like a real creator wrote it.
-- Do not write generic essays.
-- Do not make all 5 scripts almost identical.
-- Give each variation a different hook.
-- Give each variation a different presentation angle.
-- Use natural spoken sentences.
-- Avoid unnecessary filler.
-- Make the first few lines extremely engaging.
-- Make the ending memorable.
-- Match the selected Script Type.
-- Match the selected Category.
-- Match the selected Tone.
-- Match the selected Audience.
-- Match the selected Language.
-- Keep every script practical for recording.
-
-Return ONLY valid JSON.
-
-JSON format:
-{
-  "results": [
-    {
-      "title": "Video title",
-      "hook": "Strong opening hook",
-      "script": "Complete ready-to-record script",
-      "score": 95,
-      "engagement": 92,
-      "structure": 94
-    }
-  ]
-}
-
-IMPORTANT:
-- The "results" array MUST contain exactly 5 objects.
-- Every object must contain title, hook, script, score, engagement, and structure.
-- score must be a number between 0 and 100.
-- engagement must be a number between 0 and 100.
-- structure must be a number between 0 and 100.
-- Do not return markdown.
-- Do not return explanations.
-- Return valid JSON only.
-
-SCORING:
-score = estimated overall script quality from 0-100.
-engagement = estimated viewer engagement potential from 0-100.
-structure = estimated script structure quality from 0-100.
-
-These are AI estimates, NOT real YouTube analytics.
-`;
+      const prompt = buildScriptPrompt({
+        topic,
+        keywords,
+        language,
+        tone,
+        length,
+        audience,
+        category,
+        scriptType,
+        creativity,
+      });
 
       const response = await fetch("/api/ai", {
         method: "POST",
@@ -639,6 +302,8 @@ These are AI estimates, NOT real YouTube analytics.
         body: JSON.stringify({
           prompt,
           json: true,
+          toolId: "script-writer",
+          count: 1,
         }),
       });
 
@@ -648,6 +313,10 @@ These are AI estimates, NOT real YouTube analytics.
         throw new Error(
           data.error || "Failed to generate scripts."
         );
+      }
+
+      if (typeof data.credits === "number") {
+        setCredits(data.credits);
       }
 
       let parsed = data.result;
@@ -741,15 +410,31 @@ These are AI estimates, NOT real YouTube analytics.
     >
       <div className="grid min-w-0 gap-6 sm:gap-8 xl:grid-cols-[420px_minmax(0,1fr)]">
 
-        {/* =========================================
-            LEFT — GENERATOR
-        ========================================= */}
+        {/* LEFT — GENERATOR */}
 
         <div className="min-w-0 rounded-3xl border border-white/10 bg-[#050814] p-4 sm:p-6">
 
-          <h2 className="mb-5 text-xl font-bold text-white sm:mb-6">
-            Generator
-          </h2>
+          {/* HEADER + CREDITS */}
+
+          <div className="mb-5 flex items-center justify-between gap-3 sm:mb-6">
+
+            <h2 className="text-xl font-bold text-white">
+              Generator
+            </h2>
+
+            {credits !== null && (
+              <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-sm">
+                <span className="text-slate-400">
+                  Credits:{" "}
+                </span>
+
+                <span className="font-semibold text-blue-400">
+                  {credits}
+                </span>
+              </div>
+            )}
+
+          </div>
 
           {/* ERROR */}
 
@@ -801,15 +486,13 @@ Examples:
                   setKeywords(e.target.value)
                 }
                 placeholder="AI, YouTube, automation, growth"
-                className="box-border block w-full max-w-full rounded-xl border border-white/10 bg-[#0B1220] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-blue-500 sm:text-base"
+                className="box-border block w-full max-w-full rounded-xl border border-white/10 bg-[#0B1220] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 sm:text-base"
               />
             </div>
 
             {/* SCRIPT TYPE / CATEGORY */}
 
             <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
-
-              {/* SCRIPT TYPE */}
 
               <div className="min-w-0">
                 <label className="mb-2 block text-sm font-medium text-slate-300">
@@ -833,8 +516,6 @@ Examples:
                   <option>Comedy / Funny</option>
                 </select>
               </div>
-
-              {/* CATEGORY */}
 
               <div className="min-w-0">
                 <label className="mb-2 block text-sm font-medium text-slate-300">
@@ -868,8 +549,6 @@ Examples:
 
             <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
-              {/* TONE */}
-
               <div className="min-w-0">
                 <label className="mb-2 block text-sm font-medium text-slate-300">
                   Tone
@@ -893,8 +572,6 @@ Examples:
                 </select>
               </div>
 
-              {/* LANGUAGE */}
-
               <div className="min-w-0">
                 <label className="mb-2 block text-sm font-medium text-slate-300">
                   Language
@@ -917,8 +594,6 @@ Examples:
                   <option>Arabic</option>
                 </select>
               </div>
-
-              {/* LENGTH */}
 
               <div className="min-w-0">
                 <label className="mb-2 block text-sm font-medium text-slate-300">
@@ -1017,7 +692,7 @@ Examples:
                 <>
                   <Wand2 size={18} />
 
-                  Generate Scripts
+                  Generate Scripts - {scriptCreditCost} Credits
                 </>
               )}
             </button>
@@ -1025,9 +700,7 @@ Examples:
           </div>
         </div>
 
-        {/* =========================================
-            RIGHT — GENERATED SCRIPTS
-        ========================================= */}
+        {/* RIGHT — GENERATED SCRIPTS */}
 
         <div className="min-w-0 rounded-3xl border border-white/10 bg-[#050814] p-4 sm:p-6">
 
@@ -1059,8 +732,6 @@ Examples:
 
             <div className="flex w-full items-center gap-2 sm:w-auto">
 
-              {/* COPY ALL */}
-
               {results.length > 0 && (
                 <button
                   type="button"
@@ -1081,8 +752,6 @@ Examples:
                   </span>
                 </button>
               )}
-
-              {/* GENERATE AGAIN */}
 
               <button
                 type="button"
@@ -1142,12 +811,10 @@ Examples:
 
                   const isBest =
                     result.score > 0 &&
-                    result.score ===
-                      maxScore;
+                    result.score === maxScore;
 
                   const isRegenerating =
-                    regeneratingIndex ===
-                    index;
+                    regeneratingIndex === index;
 
                   return (
                     <div
@@ -1158,8 +825,6 @@ Examples:
                       {/* CARD TOP */}
 
                       <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-5">
-
-                        {/* LEFT */}
 
                         <div className="min-w-0 flex-1">
 
@@ -1182,14 +847,10 @@ Examples:
                             {result.title}
                           </h3>
 
-                          {/* SCORE */}
-
                           <p className="mt-2 text-sm font-semibold text-emerald-400">
                             AI Score{" "}
                             {result.score}%
                           </p>
-
-                          {/* METRICS */}
 
                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs sm:gap-x-4">
 
@@ -1197,9 +858,7 @@ Examples:
                               ⚡{" "}
                               <span className="font-semibold text-cyan-400">
                                 Engagement{" "}
-                                {
-                                  result.engagement
-                                }/100
+                                {result.engagement}/100
                               </span>
                             </span>
 
@@ -1207,19 +866,14 @@ Examples:
                               🧩{" "}
                               <span className="font-semibold text-green-400">
                                 Structure{" "}
-                                {
-                                  result.structure
-                                }/100
+                                {result.structure}/100
                               </span>
                             </span>
 
                             <span className="text-slate-400">
                               ✍{" "}
                               <span className="font-semibold text-yellow-400">
-                                {
-                                  result.script
-                                    .length
-                                } chars
+                                {result.script.length} chars
                               </span>
                             </span>
 
@@ -1275,8 +929,7 @@ Examples:
                                 group-hover:opacity-100
                               "
                             >
-                              {copiedIndex ===
-                              index
+                              {copiedIndex === index
                                 ? "Copied!"
                                 : "Copy Script"}
                             </span>
@@ -1290,9 +943,7 @@ Examples:
                             <button
                               type="button"
                               onClick={() =>
-                                toggleFavorite(
-                                  index
-                                )
+                                toggleFavorite(index)
                               }
                               disabled={
                                 isRegenerating
@@ -1352,9 +1003,7 @@ Examples:
                             <button
                               type="button"
                               onClick={() =>
-                                regenerateScript(
-                                  index
-                                )
+                                regenerateScript(index)
                               }
                               disabled={
                                 loading ||

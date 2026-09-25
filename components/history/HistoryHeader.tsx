@@ -1,12 +1,34 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { History } from "lucide-react";
 
 export default function HistoryHeader() {
+  const [totalHistory, setTotalHistory] = useState(0);
+
+  useEffect(() => {
+    async function loadDashboard() {
+      try {
+        const res = await fetch("/api/dashboard");
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          setTotalHistory(
+            data.statistics?.totalGenerations ?? 0
+          );
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    loadDashboard();
+  }, []);
+
   return (
     <div className="rounded-3xl border border-white/10 bg-[#0B1220] p-8 shadow-xl">
       <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-        
+
         {/* Left */}
         <div className="flex items-start gap-5">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/10">
@@ -34,7 +56,7 @@ export default function HistoryHeader() {
           </p>
 
           <h2 className="mt-1 text-3xl font-bold text-white">
-            0
+            {totalHistory}
           </h2>
         </div>
 
