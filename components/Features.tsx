@@ -15,12 +15,12 @@ import {
 } from "lucide-react";
 
 type Feature = {
-  title: string
-  description: string
-  Icon: LucideIcon
-  iconColor: string
-  iconGlow: string
-}
+  title: string;
+  description: string;
+  Icon: LucideIcon;
+  iconColor: string;
+  iconGlow: string;
+};
 
 const FEATURES: Feature[] = [
   {
@@ -66,12 +66,12 @@ const FEATURES: Feature[] = [
     iconGlow: "shadow-[0_0_20px_-4px_rgba(96,165,250,0.6)]",
   },
   {
-  title: "AI Logo Generator",
-  description: "Create professional logos with AI in seconds.",
-  Icon: BadgePlus,
-  iconColor: "text-indigo-400",
-  iconGlow: "shadow-[0_0_20px_-4px_rgba(129,140,248,0.6)]",
-},
+    title: "AI Logo Generator",
+    description: "Create professional logos with AI in seconds.",
+    Icon: BadgePlus,
+    iconColor: "text-indigo-400",
+    iconGlow: "shadow-[0_0_20px_-4px_rgba(129,140,248,0.6)]",
+  },
   {
     title: "Remove Background",
     description: "Remove image backgrounds instantly.",
@@ -108,11 +108,15 @@ const FEATURES: Feature[] = [
     iconGlow: "shadow-[0_0_20px_-4px_rgba(167,139,250,0.6)]",
   },
 ];
+
 export default function Features() {
   return (
-    <section className="w-full px-6 py-16 sm:px-8 lg:px-12">
+    <section
+      id="features"
+      className="w-full px-6 py-16 sm:px-8 lg:px-12"
+    >
       <div className="mx-auto max-w-7xl">
-        {/* Heading */}
+        {/* Section Header */}
         <div className="mb-12 text-center">
           <h2 className="bg-gradient-to-r from-fuchsia-500 via-indigo-400 to-sky-400 bg-clip-text text-4xl font-bold text-transparent">
             The Future of RYNOVIX
@@ -123,25 +127,35 @@ export default function Features() {
           </p>
         </div>
 
-        {/* Grid */}
+        {/* Feature Cards */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {FEATURES.map(
             ({ title, description, Icon, iconColor, iconGlow }) => (
               <div
                 key={title}
-                className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:-translate-y-1 hover:border-white/20"
+                className="group relative rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-all duration-300 hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.05]"
               >
+                {/* Coming Soon Badge */}
+                <div className="absolute right-4 top-4">
+                  <span className="rounded-full border border-indigo-400/20 bg-indigo-500/10 px-2.5 py-1 text-[9px] font-semibold tracking-wider text-indigo-300">
+                    COMING SOON
+                  </span>
+                </div>
+
+                {/* Icon */}
                 <div
                   className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-white/5 ${iconGlow}`}
                 >
                   <Icon className={`h-6 w-6 ${iconColor}`} />
                 </div>
 
-                <h3 className="text-lg font-semibold text-white">
+                {/* Title */}
+                <h3 className="pr-24 text-lg font-semibold text-white">
                   {title}
                 </h3>
 
-                <p className="mt-2 text-sm text-slate-400">
+                {/* Description */}
+                <p className="mt-2 text-sm leading-6 text-slate-400">
                   {description}
                 </p>
               </div>

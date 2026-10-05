@@ -28,7 +28,6 @@ export const plans: Plan[] = [
     monthlyPrice: 0,
     yearlyPrice: 0,
 
-    // Replace with real payment gateway IDs later
     monthlyPriceId: "price_free_monthly",
     yearlyPriceId: "price_free_yearly",
 
@@ -50,8 +49,8 @@ export const plans: Plan[] = [
     monthlyPrice: 9,
     yearlyPrice: 7,
 
-    monthlyPriceId: "price_pro_monthly",
-    yearlyPriceId: "price_pro_yearly",
+    monthlyPriceId: "2170309",
+    yearlyPriceId: "2170323",
 
     popular: true,
 
@@ -74,8 +73,8 @@ export const plans: Plan[] = [
     monthlyPrice: 29,
     yearlyPrice: 23,
 
-    monthlyPriceId: "price_business_monthly",
-    yearlyPriceId: "price_business_yearly",
+    monthlyPriceId: "2170366",
+    yearlyPriceId: "2170369",
 
     features: [
       "10,000 AI Credits / month",

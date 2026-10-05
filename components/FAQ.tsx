@@ -91,7 +91,7 @@ function FaqCard({ item }: { item: FaqItem }) {
 
 export default function FAQ() {
   return (
-    <section className="bg-[#080c1c] py-20 px-4">
+    <section id="faq" className="bg-[#080c1c] py-20 px-4">
       <div className="mx-auto max-w-6xl rounded-3xl border border-[#252B45] bg-[#0a0f24]/60 px-6 py-14 shadow-[0_0_60px_-20px_rgba(59,130,246,0.35)] md:px-10">
         <div className="mx-auto mb-12 max-w-2xl text-center">
           <span className="inline-flex items-center gap-2 rounded-full border border-[#252B45] bg-[#111834] px-4 py-1.5 text-xs font-medium text-slate-300">

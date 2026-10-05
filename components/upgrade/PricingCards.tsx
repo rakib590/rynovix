@@ -13,13 +13,34 @@ import {
 import {
   plans,
   getPlanPrice,
-  getPlanPriceId,
   type BillingCycle,
 } from "@/lib/billing/plans";
 
 interface PricingCardsProps {
   currentPlan?: string;
 }
+
+/* ---------------------------------------
+   Lemon Squeezy Checkout Links
+---------------------------------------- */
+
+const CHECKOUT_LINKS = {
+  pro: {
+    monthly:
+      "https://rynovix-ai.lemonsqueezy.com/checkout/buy/1f9dfd35-3672-4b4b-b507-954059a00cb9",
+
+    yearly:
+      "https://rynovix-ai.lemonsqueezy.com/checkout/buy/dbd06ea6-7bdf-49af-9d98-2ef18a2764fd",
+  },
+
+  business: {
+    monthly:
+      "https://rynovix-ai.lemonsqueezy.com/checkout/buy/b2dbb4ee-b86f-4bec-b01e-c9e7c6f63d44",
+
+    yearly:
+      "https://rynovix-ai.lemonsqueezy.com/checkout/buy/80f2c0b9-8a78-4418-b2ff-7a1b6256cb37",
+  },
+};
 
 export default function PricingCards({
   currentPlan = "Free",
@@ -37,6 +58,7 @@ export default function PricingCards({
 
     if (!plan) return;
 
+    /* Current plan হলে checkout খুলবে না */
     if (
       plan.name.toLowerCase() ===
       currentPlan.toLowerCase()
@@ -44,37 +66,32 @@ export default function PricingCards({
       return;
     }
 
+    /* Free plan upgrade করার প্রয়োজন নেই */
     if (plan.id === "free") {
+      return;
+    }
+
+    /* Checkout links */
+    const checkoutLinks =
+      CHECKOUT_LINKS[
+        plan.id as keyof typeof CHECKOUT_LINKS
+      ];
+
+    if (!checkoutLinks) {
+      return;
+    }
+
+    const checkoutUrl =
+      checkoutLinks[billingCycle];
+
+    if (!checkoutUrl) {
       return;
     }
 
     setLoadingPlan(plan.id);
 
-    const priceId = getPlanPriceId(
-      plan,
-      billingCycle
-    );
-
-    console.log("Upgrade request:", {
-      planId: plan.id,
-      priceId,
-      billingCycle,
-    });
-
-    /*
-      Future Payment Gateway
-
-      Stripe
-      bKash
-      SSLCommerz
-      Paddle
-
-      Checkout logic will be added here.
-    */
-
-    setTimeout(() => {
-      setLoadingPlan(null);
-    }, 1200);
+    /* Open Lemon Squeezy checkout */
+    window.location.href = checkoutUrl;
   }
 
   return (
@@ -82,10 +99,11 @@ export default function PricingCards({
       id="pricing"
       className="rounded-3xl border border-white/10 bg-[#0B1220] p-6 shadow-xl sm:p-8 lg:p-10"
     >
-      {/* Header */}
+      {/* ---------------------------------------
+          Header
+      ---------------------------------------- */}
 
       <div className="text-center">
-
         <div className="mx-auto mb-4 inline-flex items-center gap-2 rounded-full border border-purple-500/20 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-400">
           <Sparkles size={14} />
 
@@ -100,14 +118,15 @@ export default function PricingCards({
           Start free and upgrade whenever you need more AI
           power, credits and premium features.
         </p>
-
       </div>
 
-      {/* Billing Toggle */}
+      {/* ---------------------------------------
+          Billing Toggle
+      ---------------------------------------- */}
 
       <div className="mt-8 flex justify-center">
-
         <div className="inline-flex rounded-2xl border border-white/10 bg-[#050814] p-1.5">
+          {/* Monthly */}
 
           <button
             type="button"
@@ -122,6 +141,8 @@ export default function PricingCards({
           >
             Monthly
           </button>
+
+          {/* Yearly */}
 
           <button
             type="button"
@@ -139,19 +160,16 @@ export default function PricingCards({
             <span className="ml-2 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-bold text-green-400">
               SAVE 20%
             </span>
-
           </button>
-
         </div>
-
       </div>
 
-      {/* Pricing Cards */}
+      {/* ---------------------------------------
+          Pricing Cards
+      ---------------------------------------- */}
 
       <div className="mt-10 grid gap-6 lg:grid-cols-3">
-
         {plans.map((plan) => {
-
           const price = getPlanPrice(
             plan,
             billingCycle
@@ -165,7 +183,6 @@ export default function PricingCards({
             loadingPlan === plan.id;
 
           return (
-
             <div
               key={plan.id}
               className={`relative flex flex-col rounded-3xl border p-6 transition-all duration-300 sm:p-7 ${
@@ -174,29 +191,25 @@ export default function PricingCards({
                   : "border-white/10 bg-[#050814]"
               }`}
             >
-
-              {/* Most Popular */}
+              {/* ---------------------------------------
+                  Most Popular
+              ---------------------------------------- */}
 
               {plan.popular && (
-
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-4 py-1.5 text-[11px] font-bold text-white shadow-lg">
-
                     <Zap size={12} />
 
                     MOST POPULAR
-
                   </span>
-
                 </div>
-
               )}
 
-              {/* Top */}
+              {/* ---------------------------------------
+                  Top Icon + Current Plan
+              ---------------------------------------- */}
 
               <div className="flex items-center justify-between">
-
                 <div
                   className={`flex h-12 w-12 items-center justify-center rounded-2xl ${
                     plan.id === "business"
@@ -206,39 +219,27 @@ export default function PricingCards({
                       : "bg-white/5 text-gray-400"
                   }`}
                 >
-
                   {plan.id === "business" ? (
-
                     <Crown size={22} />
-
                   ) : plan.id === "pro" ? (
-
                     <Zap size={22} />
-
                   ) : (
-
                     <Sparkles size={22} />
-
                   )}
-
                 </div>
 
                 {isCurrent && (
-
                   <span className="rounded-full bg-green-500/10 px-3 py-1 text-[10px] font-bold uppercase text-green-400">
-
                     Current Plan
-
                   </span>
-
                 )}
-
               </div>
 
-              {/* Name */}
+              {/* ---------------------------------------
+                  Plan Name
+              ---------------------------------------- */}
 
               <div className="mt-6">
-
                 <h3 className="text-2xl font-bold text-white">
                   {plan.name}
                 </h3>
@@ -246,98 +247,80 @@ export default function PricingCards({
                 <p className="mt-2 min-h-[48px] text-sm leading-6 text-gray-500">
                   {plan.description}
                 </p>
-
               </div>
 
-              {/* Price */}
+              {/* ---------------------------------------
+                  Price
+              ---------------------------------------- */}
 
               <div className="mt-6">
-
                 <div className="flex items-end gap-1">
-
                   <span className="text-4xl font-bold text-white">
                     ${price}
                   </span>
 
                   {plan.id !== "free" && (
-
                     <span className="mb-1 text-sm text-gray-500">
-
                       {billingCycle === "monthly"
                         ? "/ month"
                         : "/ month (yearly)"}
-
                     </span>
-
                   )}
-
                 </div>
 
                 {billingCycle === "yearly" &&
                   plan.id !== "free" && (
-
-                  <p className="mt-2 text-xs font-medium text-green-400">
-
-                    Billed yearly • Save 20%
-
-                  </p>
-
-                )}
+                    <p className="mt-2 text-xs font-medium text-green-400">
+                      Billed yearly • Save 20%
+                    </p>
+                  )}
 
                 {plan.id === "free" && (
-
                   <p className="mt-2 text-xs text-gray-500">
-
                     No credit card required
-
                   </p>
-
                 )}
-
               </div>
 
               <div className="my-7 h-px bg-white/10" />
-              {/* Features */}
+
+              {/* ---------------------------------------
+                  Features
+              ---------------------------------------- */}
 
               <div className="flex-1">
-
                 <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-gray-500">
                   What's included
                 </p>
 
                 <ul className="space-y-3">
-
                   {plan.features.map((feature) => (
-
                     <li
                       key={feature}
                       className="flex items-start gap-3 text-sm text-gray-300"
                     >
-
                       <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-green-500/10">
-
                         <Check
                           size={13}
                           className="text-green-400"
                         />
-
                       </span>
 
                       <span>{feature}</span>
-
                     </li>
-
                   ))}
-
                 </ul>
-
               </div>
 
-              {/* Upgrade Button */}
+              {/* ---------------------------------------
+                  Upgrade Button
+              ---------------------------------------- */}
 
               <button
                 type="button"
-                onClick={() => handleUpgrade(plan.id)}
+                onClick={() =>
+                  handleUpgrade(plan.id)
+                }
                 disabled={
                   isCurrent ||
                   plan.id === "free" ||
@@ -353,59 +336,47 @@ export default function PricingCards({
                     : "border border-white/10 bg-white/5 text-white hover:border-blue-500/40 hover:bg-blue-500/10"
                 }`}
               >
-
                 {isLoading ? (
                   <>
-
                     <Loader2
                       size={17}
                       className="animate-spin"
                     />
 
-                    Preparing Checkout...
-
+                    Opening Checkout...
                   </>
                 ) : isCurrent ? (
                   <>
-
                     <Check size={17} />
 
                     Your Current Plan
-
                   </>
                 ) : plan.id === "free" ? (
                   "Free Plan"
                 ) : (
                   <>
-
                     Upgrade to {plan.name}
 
                     <Zap size={16} />
-
                   </>
                 )}
-
               </button>
-
             </div>
-
           );
-
         })}
-
       </div>
-      {/* Secure Checkout */}
+
+      {/* ---------------------------------------
+          Secure Checkout
+      ---------------------------------------- */}
 
       <div className="mt-10 border-t border-white/10 pt-8">
-
         <div className="flex flex-col items-center justify-center gap-2 text-center">
-
           <p className="text-xs font-medium text-gray-500">
             Secure checkout • Cancel anytime • No hidden fees
           </p>
 
           <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
-
             <div className="rounded-lg border border-white/10 bg-[#050814] px-3 py-2 text-xs text-gray-400">
               Visa
             </div>
@@ -415,26 +386,15 @@ export default function PricingCards({
             </div>
 
             <div className="rounded-lg border border-white/10 bg-[#050814] px-3 py-2 text-xs text-gray-400">
-              bKash
+              PayPal
             </div>
-
-            <div className="rounded-lg border border-white/10 bg-[#050814] px-3 py-2 text-xs text-gray-400">
-              SSLCommerz
-            </div>
-
           </div>
 
           <p className="mt-3 text-[11px] text-gray-600">
-            Payment gateway integration will be connected
-            before production launch.
+            Payments securely processed by Lemon Squeezy.
           </p>
-
         </div>
-
       </div>
-
     </section>
-
   );
-
 }

@@ -48,8 +48,11 @@ const features: Feature[] = [
 
 export default function WhyChoose() {
   return (
-    <section className="w-full bg-[#060B1A] py-16 px-6 sm:px-6 lg:px-6">
-      <div className="mx-auto max-w-7xl rounded-3x1 border border-[#252B45] bg-[#0A1024]/60 p-6 sm:p-10 shadow-[0_0_80px_-20px_rgba(59,130,246,0.25)]">
+    <section 
+    id="why-choose"
+    className="w-full bg-[#060B1A] py-16 px-6 sm:px-6 lg:px-6"
+    >
+      <div className="mx-auto max-w-7xl rounded-3xl border border-[#252B45] bg-[#0A1024]/60 p-6 sm:p-10 shadow-[0_0_80px_-20px_rgba(59,130,246,0.25)]">
         {/* Badge */}
         <div className="mb-10 flex justify-center">
           <span className="text-lg font-bold uppercase tracking-[0.2em] bg-gradient-to-r from-blue-400 to-fuchsia-500 bg-clip-text text-transparent">
