@@ -2,10 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const requestUrl = new URL(request.url);
 
-  const code = searchParams.get("code");
-  const rawNext = searchParams.get("next");
+  const code = requestUrl.searchParams.get("code");
+  const rawNext = requestUrl.searchParams.get("next");
 
   // --------------------------------
   // Validate redirect destination
@@ -18,38 +18,39 @@ export async function GET(request: Request) {
       : "/dashboard";
 
   console.log("========== AUTH CALLBACK ==========");
+  console.log("ORIGIN:", requestUrl.origin);
   console.log("CODE:", code ? "Received" : "Missing");
-  console.log("NEXT:", next);
+  console.log("RAW NEXT:", rawNext);
+  console.log("FINAL NEXT:", next);
 
   // --------------------------------
-  // No code
+  // No OAuth code
   // --------------------------------
   if (!code) {
-    console.error("AUTH CALLBACK ERROR: No code received");
+    console.error(
+      "AUTH CALLBACK ERROR: No OAuth code received"
+    );
 
-    return NextResponse.json(
-      {
-        error: "No code received",
-      },
-      { status: 400 }
+    return NextResponse.redirect(
+      new URL(
+        `/login?error=${encodeURIComponent(
+          "Google authentication failed. No authorization code received."
+        )}`,
+        requestUrl.origin
+      )
     );
   }
 
   // --------------------------------
-  // Create Supabase server client
+  // Supabase Server Client
   // --------------------------------
   const supabase = await createClient();
 
   // --------------------------------
-  // Exchange code for session
+  // Exchange OAuth code for session
   // --------------------------------
   const { error } =
     await supabase.auth.exchangeCodeForSession(code);
-
-  console.log(
-    "EXCHANGE ERROR:",
-    error ? error.message : "None"
-  );
 
   // --------------------------------
   // Exchange failed
@@ -57,23 +58,57 @@ export async function GET(request: Request) {
   if (error) {
     console.error(
       "AUTH CALLBACK EXCHANGE FAILED:",
-      error
+      error.message
     );
 
-    return NextResponse.json(
-      {
-        message: "Exchange Failed",
-        error: error.message,
-      },
-      { status: 400 }
+    return NextResponse.redirect(
+      new URL(
+        `/login?error=${encodeURIComponent(
+          error.message
+        )}`,
+        requestUrl.origin
+      )
     );
   }
 
   // --------------------------------
-  // Success
+  // Verify session
   // --------------------------------
-  console.log("AUTH CALLBACK SUCCESS");
-  console.log("REDIRECTING TO:", next);
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-  return NextResponse.redirect(`${origin}${next}`);
+  if (userError || !user) {
+    console.error(
+      "AUTH CALLBACK SESSION ERROR:",
+      userError?.message ?? "User session not found"
+    );
+
+    return NextResponse.redirect(
+      new URL(
+        `/login?error=${encodeURIComponent(
+          "Login succeeded but the user session could not be created."
+        )}`,
+        requestUrl.origin
+      )
+    );
+  }
+
+  console.log(
+    "AUTH CALLBACK SUCCESS:",
+    user.email ?? user.id
+  );
+
+  console.log(
+    "REDIRECTING TO:",
+    `${requestUrl.origin}${next}`
+  );
+
+  // --------------------------------
+  // Redirect after successful login
+  // --------------------------------
+  return NextResponse.redirect(
+    new URL(next, requestUrl.origin)
+  );
 }
