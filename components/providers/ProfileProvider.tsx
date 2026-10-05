@@ -54,65 +54,277 @@ export function ProfileProvider({
 }: {
   children: ReactNode;
 }) {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [profile, setProfile] =
     useState<ProfileData | null>(null);
 
   const [loading, setLoading] = useState(true);
 
+  // --------------------------------
+  // Load / Create Profile
+  // --------------------------------
   async function refreshProfile() {
     setLoading(true);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    try {
+      // --------------------------------
+      // Get authenticated user
+      // --------------------------------
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-    if (!user) {
-      setProfile(null);
-      setLoading(false);
-      return;
-    }
+      if (userError) {
+        console.error(
+          "PROFILE AUTH ERROR:",
+          userError.message
+        );
 
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
+        setProfile(null);
+        return;
+      }
 
-    if (data) {
+      // --------------------------------
+      // No authenticated user
+      // --------------------------------
+      if (!user) {
+        console.log(
+          "PROFILE: No authenticated user"
+        );
+
+        setProfile(null);
+        return;
+      }
+
+      console.log(
+        "PROFILE USER:",
+        user.email ?? user.id
+      );
+
+      // --------------------------------
+      // Get existing profile
+      // --------------------------------
+      const {
+        data,
+        error: profileError,
+      } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      // --------------------------------
+      // Profile does not exist
+      // --------------------------------
+      if (!data) {
+        console.log(
+          "PROFILE: No profile found. Creating profile..."
+        );
+
+        const metadata =
+          user.user_metadata ?? {};
+
+        const fullName =
+          metadata.full_name ??
+          metadata.name ??
+          "";
+
+        const avatarUrl =
+          metadata.avatar_url ??
+          metadata.picture ??
+          "";
+
+        const newProfile = {
+          id: user.id,
+
+          full_name: fullName,
+          username: "",
+          website: "",
+          bio: "",
+          avatar_url: avatarUrl,
+
+          youtube: "",
+          facebook: "",
+          instagram: "",
+          x: "",
+          linkedin: "",
+
+          current_plan: "Free",
+          ai_credits: 100,
+          verified: true,
+        };
+
+        const {
+          data: createdProfile,
+          error: createError,
+        } = await supabase
+          .from("profiles")
+          .insert(newProfile)
+          .select("*")
+          .single();
+
+        if (createError) {
+          console.error(
+            "PROFILE CREATE ERROR:",
+            createError.message
+          );
+
+          console.error(
+            "PROFILE CREATE DETAILS:",
+            createError
+          );
+
+          setProfile(null);
+          return;
+        }
+
+        console.log(
+          "PROFILE CREATED SUCCESSFULLY"
+        );
+
+        setProfile({
+          id: user.id,
+
+          full_name:
+            createdProfile.full_name ?? "",
+          username:
+            createdProfile.username ?? "",
+          email: user.email ?? "",
+
+          website:
+            createdProfile.website ?? "",
+          bio:
+            createdProfile.bio ?? "",
+          avatar_url:
+            createdProfile.avatar_url ?? "",
+
+          youtube:
+            createdProfile.youtube ?? "",
+          facebook:
+            createdProfile.facebook ?? "",
+          instagram:
+            createdProfile.instagram ?? "",
+          x:
+            createdProfile.x ?? "",
+          linkedin:
+            createdProfile.linkedin ?? "",
+
+          current_plan:
+            createdProfile.current_plan ??
+            "Free",
+
+          ai_credits:
+            createdProfile.ai_credits ?? 100,
+
+          verified:
+            createdProfile.verified ?? true,
+
+          member_since:
+            createdProfile.created_at
+              ? new Date(
+                  createdProfile.created_at
+                )
+                  .getFullYear()
+                  .toString()
+              : new Date()
+                  .getFullYear()
+                  .toString(),
+        });
+
+        return;
+      }
+
+      // --------------------------------
+      // Existing profile
+      // --------------------------------
+      if (profileError) {
+        console.error(
+          "PROFILE FETCH ERROR:",
+          profileError.message
+        );
+
+        console.error(
+          "PROFILE FETCH DETAILS:",
+          profileError
+        );
+
+        setProfile(null);
+        return;
+      }
+
+      console.log(
+        "PROFILE FOUND:",
+        data.id
+      );
+
+      // --------------------------------
+      // Set profile state
+      // --------------------------------
       setProfile({
         id: user.id,
 
-        full_name: data.full_name ?? "",
-        username: data.username ?? "",
-        email: user.email ?? "",
+        full_name:
+          data.full_name ?? "",
+        username:
+          data.username ?? "",
+        email:
+          user.email ?? "",
 
-        website: data.website ?? "",
-        bio: data.bio ?? "",
-        avatar_url: data.avatar_url ?? "",
+        website:
+          data.website ?? "",
+        bio:
+          data.bio ?? "",
+        avatar_url:
+          data.avatar_url ?? "",
 
-        youtube: data.youtube ?? "",
-        facebook: data.facebook ?? "",
-        instagram: data.instagram ?? "",
-        x: data.x ?? "",
-        linkedin: data.linkedin ?? "",
+        youtube:
+          data.youtube ?? "",
+        facebook:
+          data.facebook ?? "",
+        instagram:
+          data.instagram ?? "",
+        x:
+          data.x ?? "",
+        linkedin:
+          data.linkedin ?? "",
 
-        current_plan: data.current_plan ?? "Free",
-        ai_credits: data.ai_credits ?? 100,
-        verified: data.verified ?? true,
+        current_plan:
+          data.current_plan ?? "Free",
 
-        member_since: data.created_at
-          ? new Date(data.created_at)
-              .getFullYear()
-              .toString()
-          : "2026",
+        ai_credits:
+          data.ai_credits ?? 100,
+
+        verified:
+          data.verified ?? true,
+
+        member_since:
+          data.created_at
+            ? new Date(
+                data.created_at
+              )
+                .getFullYear()
+                .toString()
+            : new Date()
+                .getFullYear()
+                .toString(),
       });
-    }
+    } catch (error) {
+      console.error(
+        "PROFILE UNEXPECTED ERROR:",
+        error
+      );
 
-    setLoading(false);
+      setProfile(null);
+    } finally {
+      setLoading(false);
+    }
   }
 
+  // --------------------------------
+  // Update Profile
+  // --------------------------------
   async function updateProfile(
     updates: Partial<ProfileData>
   ) {
@@ -123,29 +335,117 @@ export function ProfileProvider({
       ...updates,
     };
 
+    // Update UI immediately
     setProfile(updatedProfile);
 
-    await supabase.from("profiles").upsert({
-      id: updatedProfile.id,
+    const {
+      error,
+    } = await supabase
+      .from("profiles")
+      .update({
+        full_name:
+          updatedProfile.full_name,
 
-      full_name: updatedProfile.full_name,
-      username: updatedProfile.username,
-      website: updatedProfile.website,
-      bio: updatedProfile.bio,
-      avatar_url: updatedProfile.avatar_url,
+        username:
+          updatedProfile.username,
 
-      youtube: updatedProfile.youtube,
-      facebook: updatedProfile.facebook,
-      instagram: updatedProfile.instagram,
-      x: updatedProfile.x,
-      linkedin: updatedProfile.linkedin,
-    });
+        website:
+          updatedProfile.website,
+
+        bio:
+          updatedProfile.bio,
+
+        avatar_url:
+          updatedProfile.avatar_url,
+
+        youtube:
+          updatedProfile.youtube,
+
+        facebook:
+          updatedProfile.facebook,
+
+        instagram:
+          updatedProfile.instagram,
+
+        x:
+          updatedProfile.x,
+
+        linkedin:
+          updatedProfile.linkedin,
+      })
+      .eq("id", updatedProfile.id);
+
+    if (error) {
+      console.error(
+        "PROFILE UPDATE ERROR:",
+        error.message
+      );
+
+      // Reload actual database state
+      await refreshProfile();
+    }
   }
 
+  // --------------------------------
+  // Initial Profile Load
+  // --------------------------------
   useEffect(() => {
-    refreshProfile();
-  }, []);
+    let mounted = true;
 
+    const loadInitialProfile = async () => {
+      if (!mounted) return;
+
+      await refreshProfile();
+    };
+
+    loadInitialProfile();
+
+    // --------------------------------
+    // Listen for Auth Changes
+    // --------------------------------
+    const {
+      data: {
+        subscription,
+      },
+    } = supabase.auth.onAuthStateChange(
+      (event) => {
+        console.log(
+          "AUTH STATE CHANGE:",
+          event
+        );
+
+        if (
+          event === "SIGNED_IN" ||
+          event === "INITIAL_SESSION" ||
+          event === "TOKEN_REFRESHED"
+        ) {
+          /*
+           * Give Supabase a moment to finish
+           * writing the session cookie before
+           * requesting the profile.
+           */
+          setTimeout(() => {
+            if (mounted) {
+              refreshProfile();
+            }
+          }, 100);
+        }
+
+        if (event === "SIGNED_OUT") {
+          setProfile(null);
+        }
+      }
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  // --------------------------------
+  // Context Value
+  // --------------------------------
   const value = useMemo(
     () => ({
       profile,
@@ -161,4 +461,20 @@ export function ProfileProvider({
       {children}
     </ProfileContext.Provider>
   );
+}
+
+// --------------------------------
+// useProfile Hook
+// --------------------------------
+export function useProfile() {
+  const context =
+    useContext(ProfileContext);
+
+  if (!context) {
+    throw new Error(
+      "useProfile must be used inside ProfileProvider"
+    );
+  }
+
+  return context;
 }
