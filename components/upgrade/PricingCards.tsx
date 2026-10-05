@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Check,
@@ -15,6 +15,8 @@ import {
   getPlanPrice,
   type BillingCycle,
 } from "@/lib/billing/plans";
+
+import { createClient } from "@/lib/supabase/client";
 
 interface PricingCardsProps {
   currentPlan?: string;
@@ -51,7 +53,34 @@ export default function PricingCards({
   const [loadingPlan, setLoadingPlan] =
     useState<string | null>(null);
 
-  function handleUpgrade(planId: string) {
+  /* ---------------------------------------
+     Reset loading state when returning
+     to the page with browser Back/Forward
+  ---------------------------------------- */
+
+  useEffect(() => {
+    const handlePageShow = () => {
+      setLoadingPlan(null);
+    };
+
+    window.addEventListener(
+      "pageshow",
+      handlePageShow
+    );
+
+    return () => {
+      window.removeEventListener(
+        "pageshow",
+        handlePageShow
+      );
+    };
+  }, []);
+
+  /* ---------------------------------------
+     Handle Upgrade
+  ---------------------------------------- */
+
+  async function handleUpgrade(planId: string) {
     const plan = plans.find(
       (item) => item.id === planId
     );
@@ -88,9 +117,41 @@ export default function PricingCards({
       return;
     }
 
+    /* ---------------------------------------
+       Check Supabase Authentication
+    ---------------------------------------- */
+
     setLoadingPlan(plan.id);
 
-    /* Open Lemon Squeezy checkout */
+    const supabase = createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    /* ---------------------------------------
+       User is NOT logged in
+       → Send to Login
+    ---------------------------------------- */
+
+    if (!user) {
+      setLoadingPlan(null);
+
+      const loginUrl =
+        `/login?next=${encodeURIComponent(
+          "/pricing"
+        )}`;
+
+      window.location.href = loginUrl;
+
+      return;
+    }
+
+    /* ---------------------------------------
+       User is logged in
+       → Open Lemon Squeezy
+    ---------------------------------------- */
+
     window.location.href = checkoutUrl;
   }
 
