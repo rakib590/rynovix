@@ -30,7 +30,6 @@ export interface ProfileData {
 
   current_plan: string;
   ai_credits: number;
-  verified: boolean;
   member_since: string;
 }
 
@@ -136,6 +135,8 @@ export function ProfileProvider({
           metadata.picture ??
           "";
 
+        // IMPORTANT:
+        // Use "credits", not "ai_credits".
         const newProfile = {
           id: user.id,
 
@@ -152,8 +153,9 @@ export function ProfileProvider({
           linkedin: "",
 
           current_plan: "Free",
-          ai_credits: 100,
-          verified: true,
+          credits: 100,
+
+          email: user.email ?? "",
         };
 
         const {
@@ -189,37 +191,50 @@ export function ProfileProvider({
 
           full_name:
             createdProfile.full_name ?? "",
+
           username:
             createdProfile.username ?? "",
-          email: user.email ?? "",
+
+          email:
+            createdProfile.email ??
+            user.email ??
+            "",
 
           website:
             createdProfile.website ?? "",
+
           bio:
             createdProfile.bio ?? "",
+
           avatar_url:
             createdProfile.avatar_url ?? "",
 
           youtube:
             createdProfile.youtube ?? "",
+
           facebook:
             createdProfile.facebook ?? "",
+
           instagram:
             createdProfile.instagram ?? "",
+
           x:
             createdProfile.x ?? "",
+
           linkedin:
             createdProfile.linkedin ?? "",
 
           current_plan:
             createdProfile.current_plan ??
+            createdProfile.plan ??
             "Free",
 
+          // Database column = credits
+          // UI state property = ai_credits
           ai_credits:
-            createdProfile.ai_credits ?? 100,
-
-          verified:
-            createdProfile.verified ?? true,
+            Number(
+              createdProfile.credits ?? 100
+            ),
 
           member_since:
             createdProfile.created_at
@@ -267,37 +282,48 @@ export function ProfileProvider({
 
         full_name:
           data.full_name ?? "",
+
         username:
           data.username ?? "",
+
         email:
-          user.email ?? "",
+          data.email ??
+          user.email ??
+          "",
 
         website:
           data.website ?? "",
+
         bio:
           data.bio ?? "",
+
         avatar_url:
           data.avatar_url ?? "",
 
         youtube:
           data.youtube ?? "",
+
         facebook:
           data.facebook ?? "",
+
         instagram:
           data.instagram ?? "",
+
         x:
           data.x ?? "",
+
         linkedin:
           data.linkedin ?? "",
 
         current_plan:
-          data.current_plan ?? "Free",
+          data.current_plan ??
+          data.plan ??
+          "Free",
 
+        // Database column = credits
+        // UI state property = ai_credits
         ai_credits:
-          data.ai_credits ?? 100,
-
-        verified:
-          data.verified ?? true,
+          Number(data.credits ?? 100),
 
         member_since:
           data.created_at
@@ -419,11 +445,6 @@ export function ProfileProvider({
           event === "INITIAL_SESSION" ||
           event === "TOKEN_REFRESHED"
         ) {
-          /*
-           * Give Supabase a moment to finish
-           * writing the session cookie before
-           * requesting the profile.
-           */
           setTimeout(() => {
             if (mounted) {
               refreshProfile();

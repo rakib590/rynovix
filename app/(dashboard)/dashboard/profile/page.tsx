@@ -277,7 +277,7 @@ export default function ProfilePage() {
           currentPlan={profile?.current_plan ?? "Free"}
           aiCredits={profile?.ai_credits ?? 100}
           memberSince={profile?.member_since ?? memberSince}
-          verified={profile?.verified ?? true}
+          verified={true}
         />
 
         {errorMessage && (

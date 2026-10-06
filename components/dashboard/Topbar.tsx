@@ -380,7 +380,7 @@ export default function Topbar({
             {/* User Info */}
             <div className="hidden text-left md:block">
               <p className="text-sm font-semibold text-white">
-                {profile?.full_name || "Rakib"}
+                {profile?.full_name || "Creator"}
               </p>
 
               <p className="text-xs text-gray-400">
@@ -420,7 +420,7 @@ export default function Topbar({
 
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-white">
-                      {profile?.full_name || "Rakib"}
+                      {profile?.full_name || "Creator"}
                     </p>
 
                     <p className="truncate text-xs text-gray-400">
