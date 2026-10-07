@@ -43,12 +43,34 @@ function LoginForm() {
       password,
     });
 
-    setLoading(false);
-
     if (error) {
+      setLoading(false);
       setErrorMessage(error.message);
       return;
     }
+
+    // --------------------------------
+    // Record successful login activity
+    // --------------------------------
+    try {
+      await fetch("/auth/login-activity", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          loginMethod: "email",
+        }),
+      });
+    } catch (error) {
+      // Login should still continue even if activity logging fails.
+      console.error(
+        "LOGIN ACTIVITY REQUEST FAILED:",
+        error
+      );
+    }
+
+    setLoading(false);
 
     // Go to the page/tool the user originally wanted
     router.replace(next);
@@ -148,7 +170,9 @@ function LoginForm() {
         <div className="my-6 flex items-center">
           <div className="h-px flex-1 bg-white/10" />
 
-          <span className="px-4 text-sm text-gray-500">OR</span>
+          <span className="px-4 text-sm text-gray-500">
+            OR
+          </span>
 
           <div className="h-px flex-1 bg-white/10" />
         </div>

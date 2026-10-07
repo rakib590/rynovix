@@ -10,7 +10,8 @@ export default function AIToolboxPage() {
       <div className="space-y-8">
         {/* Header */}
         <ToolboxHeader />
-       {/* Search + Tool Grid */}
+
+        {/* Search + Tool Grid */}
         <ToolGrid />
       </div>
     </DashboardLayout>

@@ -35,7 +35,6 @@ type Tool = {
   image?: string;
   categories?: ToolCategory[];
 
-  // Sort metadata
   popularity: number;
   newest: number;
 };
@@ -195,32 +194,31 @@ export default function ToolGrid() {
 
   return (
     <section>
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-white">
-          AI Toolbox
-        </h2>
+      {/* Filters + Search + Sort */}
+      <div className="mb-8 flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#0B1220] p-3 lg:flex-row lg:items-center lg:justify-between">
 
-        <p className="mt-1 text-gray-400">
-          Choose an AI tool to get started.
-        </p>
+        {/* Categories */}
+        <div className="min-w-0 flex-1 overflow-x-auto">
+          <div className="flex min-w-max items-center gap-2">
+            <ToolCategories
+              activeCategory={activeCategory}
+              onCategoryChange={setActiveCategory}
+            />
+          </div>
+        </div>
+
+        {/* Search + Sort */}
+        <div className="flex shrink-0 items-center gap-3">
+          <SearchTools
+            search={search}
+            onSearchChange={setSearch}
+            sort={sort}
+            onSortChange={setSort}
+          />
+        </div>
       </div>
 
-      <div className="mb-6">
-        <SearchTools
-          search={search}
-          onSearchChange={setSearch}
-          sort={sort}
-          onSortChange={setSort}
-        />
-      </div>
-
-      <div className="mb-6">
-        <ToolCategories
-          activeCategory={activeCategory}
-          onCategoryChange={setActiveCategory}
-        />
-      </div>
-
+      {/* Tool Cards */}
       {filteredTools.length === 0 ? (
         <div className="rounded-3xl border border-white/10 bg-[#0B1220] py-16 text-center">
           <Search

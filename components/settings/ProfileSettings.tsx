@@ -1,12 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-import {
-  User,
-  Camera,
-  Save,
-} from "lucide-react";
+import { User, Save } from "lucide-react";
 
 import AvatarUpload from "@/components/profile/AvatarUpload";
 
@@ -16,10 +11,7 @@ import { useProfile } from "@/hooks/useProfile";
 export default function ProfileSettings() {
   const supabase = createClient();
 
-  const {
-    profile,
-    refreshProfile,
-  } = useProfile();
+  const { profile, refreshProfile } = useProfile();
 
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
@@ -42,17 +34,17 @@ export default function ProfileSettings() {
   }, [profile]);
 
   async function handleSave() {
-    if (!profile) return;
+    if (!profile || saving) return;
 
     setSaving(true);
 
     const { error } = await supabase
       .from("profiles")
       .update({
-        full_name: fullName,
-        username: username,
-        website: website,
-        bio: bio,
+        full_name: fullName.trim(),
+        username: username.trim(),
+        website: website.trim(),
+        bio: bio.trim(),
         avatar_url: avatarUrl,
       })
       .eq("id", profile.id);
@@ -63,55 +55,55 @@ export default function ProfileSettings() {
 
     setSaving(false);
   }
-  return (
-    <section className="rounded-3xl border border-white/10 bg-[#0B1220] p-8 shadow-xl">
 
+  return (
+    <section className="rounded-3xl border border-white/10 bg-[#0B1220] p-5 shadow-xl sm:p-8">
       {/* Header */}
-      <div className="mb-8 flex items-center gap-4">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10">
-          <User size={28} className="text-blue-400" />
+      <div className="mb-8 flex items-start gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-500/10 sm:h-14 sm:w-14">
+          <User size={26} className="text-blue-400 sm:h-7 sm:w-7" />
         </div>
 
-        <div>
-          <h2 className="text-2xl font-bold text-white">
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold text-white sm:text-2xl">
             Profile Settings
           </h2>
 
-          <p className="mt-1 text-gray-400">
+          <p className="mt-1 text-sm leading-6 text-gray-400">
             Update your personal information and creator profile.
           </p>
         </div>
       </div>
 
       {/* Avatar */}
-<div className="mb-10 flex flex-col items-center gap-6 sm:flex-row">
+      <div className="mb-10 flex flex-col gap-5 rounded-2xl border border-white/10 bg-[#050814] p-5 sm:flex-row sm:items-center">
+        <div className="shrink-0">
+          <AvatarUpload
+            uid={profile?.id || ""}
+            avatarUrl={avatarUrl}
+            isEditing={true}
+            onUpload={(url) => {
+              setAvatarUrl(url);
+              refreshProfile();
+            }}
+          />
+        </div>
 
-  <AvatarUpload
-    uid={profile?.id || ""}
-    avatarUrl={avatarUrl}
-    isEditing={true}
-    onUpload={(url) => {
-      setAvatarUrl(url);
-      refreshProfile();
-    }}
-  />
+        <div className="min-w-0">
+          <h3 className="text-lg font-semibold text-white">
+            Profile Photo
+          </h3>
 
-  <div>
-    <h3 className="text-lg font-semibold text-white">
-      Profile Photo
-    </h3>
-
-    <p className="mt-2 text-sm text-gray-400">
-      Upload your profile picture.
-      <br />
-      JPG, PNG or WebP • Max 5MB
-    </p>
-  </div>
-
-</div>
+          <p className="mt-2 text-sm leading-6 text-gray-400">
+            Upload your profile picture.
+            <br />
+            JPG, PNG or WebP • Max 5MB
+          </p>
+        </div>
+      </div>
 
       {/* Form */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-5 md:grid-cols-2 md:gap-6">
         {/* Full Name */}
         <div>
           <label className="mb-2 block text-sm font-medium text-gray-300">
@@ -122,7 +114,8 @@ export default function ProfileSettings() {
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            className="w-full rounded-2xl border border-white/10 bg-[#050814] px-4 py-3 text-white outline-none transition focus:border-blue-500"
+            placeholder="Your full name"
+            className="h-12 w-full rounded-2xl border border-white/10 bg-[#050814] px-4 text-sm text-white outline-none transition placeholder:text-gray-600 hover:border-white/20 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
           />
         </div>
 
@@ -138,7 +131,8 @@ export default function ProfileSettings() {
             onChange={(e) =>
               setUsername(e.target.value.replace(/^@/, ""))
             }
-            className="w-full rounded-2xl border border-white/10 bg-[#050814] px-4 py-3 text-white outline-none transition focus:border-blue-500"
+            placeholder="username"
+            className="h-12 w-full rounded-2xl border border-white/10 bg-[#050814] px-4 text-sm text-white outline-none transition placeholder:text-gray-600 hover:border-white/20 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
           />
         </div>
 
@@ -152,8 +146,12 @@ export default function ProfileSettings() {
             type="email"
             value={email}
             disabled
-            className="w-full cursor-not-allowed rounded-2xl border border-white/10 bg-[#050814] px-4 py-3 text-gray-400 outline-none"
+            className="h-12 w-full cursor-not-allowed rounded-2xl border border-white/10 bg-[#050814] px-4 text-sm text-gray-500 outline-none"
           />
+
+          <p className="mt-2 text-xs text-gray-600">
+            Email address cannot be changed here.
+          </p>
         </div>
 
         {/* Website */}
@@ -167,13 +165,13 @@ export default function ProfileSettings() {
             value={website}
             onChange={(e) => setWebsite(e.target.value)}
             placeholder="https://yourwebsite.com"
-            className="w-full rounded-2xl border border-white/10 bg-[#050814] px-4 py-3 text-white outline-none transition focus:border-blue-500"
+            className="h-12 w-full rounded-2xl border border-white/10 bg-[#050814] px-4 text-sm text-white outline-none transition placeholder:text-gray-600 hover:border-white/20 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
           />
         </div>
       </div>
 
       {/* Bio */}
-      <div className="mt-6">
+      <div className="mt-5 md:mt-6">
         <label className="mb-2 block text-sm font-medium text-gray-300">
           Creator Bio
         </label>
@@ -182,23 +180,24 @@ export default function ProfileSettings() {
           rows={5}
           value={bio}
           onChange={(e) => setBio(e.target.value)}
-          className="w-full resize-none rounded-2xl border border-white/10 bg-[#050814] px-4 py-3 text-white outline-none transition focus:border-blue-500"
+          placeholder="Tell us a little about yourself..."
+          className="w-full resize-none rounded-2xl border border-white/10 bg-[#050814] px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-gray-600 hover:border-white/20 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
         />
       </div>
+
       {/* Save Button */}
-      <div className="mt-8 flex justify-end">
+      <div className="mt-8 flex justify-stretch sm:justify-end">
         <button
           type="button"
           onClick={handleSave}
-          disabled={saving}
-          className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={saving || !profile}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
         >
           <Save size={18} />
 
           {saving ? "Saving..." : "Save Changes"}
         </button>
       </div>
-
     </section>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { BadgeCheck } from "lucide-react";
 
 interface ProfileHeaderProps {
@@ -19,6 +20,8 @@ export default function ProfileHeader({
   verified = true,
   onEditProfile,
 }: ProfileHeaderProps) {
+  const router = useRouter();
+
   return (
     <div className="rounded-3xl border border-white/10 bg-[#0B1220] p-8 shadow-xl">
       <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
@@ -36,19 +39,18 @@ export default function ProfileHeader({
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-2xl font-bold text-gray-400">
-                {fullName?.charAt(0) || "U"}
+                {fullName?.charAt(0)?.toUpperCase() || "U"}
               </div>
             )}
           </div>
 
-
+          {/* User Details */}
           <div>
             <div className="flex flex-wrap items-center gap-3">
 
               <h1 className="text-3xl font-bold text-white">
                 {fullName || "My Profile"}
               </h1>
-
 
               {verified && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-3 py-1 text-xs font-semibold text-green-400">
@@ -59,24 +61,20 @@ export default function ProfileHeader({
 
             </div>
 
-
             <p className="mt-2 text-gray-400">
               @{username || "creator"}
             </p>
 
-
             <p className="mt-1 text-sm text-gray-500">
               {email}
             </p>
-
           </div>
-
         </div>
-
 
         {/* Actions */}
         <div className="flex flex-wrap gap-4">
 
+          {/* Edit Profile */}
           <button
             type="button"
             onClick={onEditProfile}
@@ -85,27 +83,25 @@ export default function ProfileHeader({
             Edit Profile
           </button>
 
-
+          {/* View Dashboard */}
           <button
             type="button"
-            onClick={() => {
-              window.location.href = "/dashboard";
-            }}
+            onClick={() => router.push("/dashboard")}
             className="rounded-xl border border-white/10 bg-[#050814] px-6 py-3 text-sm font-semibold text-gray-300 transition hover:border-blue-500 hover:text-white"
           >
             View Dashboard
           </button>
 
-
+          {/* Upgrade Plan */}
           <button
             type="button"
+            onClick={() => router.push("/dashboard/billing")}
             className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-6 py-3 text-sm font-semibold text-yellow-400 transition hover:bg-yellow-500 hover:text-black"
           >
             Upgrade Plan
           </button>
 
         </div>
-
       </div>
     </div>
   );
