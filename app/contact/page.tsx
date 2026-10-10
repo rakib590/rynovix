@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -10,13 +11,60 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+
+const SUPPORT_EMAIL = "rynovix.support@gmail.com";
 
 export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const supabase = createClient();
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitted(true);
+
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
+    setSubmitError("");
+
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+
+    const name = String(form.get("name") ?? "").trim();
+    const email = String(form.get("email") ?? "").trim();
+    const subject = String(form.get("subject") ?? "").trim();
+    const message = String(form.get("message") ?? "").trim();
+
+    try {
+      const { error } = await supabase
+        .from("contact_messages")
+        .insert({
+          name,
+          email,
+          subject,
+          message,
+        });
+
+      if (error) {
+        console.error("Contact form submission failed:", error);
+        setSubmitError(
+          "We couldn't save your message. Please email our support team directly."
+        );
+        return;
+      }
+
+      setSubmitted(true);
+      formElement.reset();
+    } catch (error) {
+      console.error("Unexpected contact form error:", error);
+      setSubmitError(
+        "Something went wrong. Please email our support team directly."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -45,8 +93,8 @@ export default function ContactPage() {
 
           <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg">
             Have a question, need help with RYNOVIX, or want to discuss a
-            business opportunity? Send us a message and our team will get back
-            to you.
+            business opportunity? Contact us by email or send a message
+            using the form below.
           </p>
         </div>
 
@@ -65,15 +113,19 @@ export default function ContactPage() {
               </h2>
 
               <p className="mt-3 text-sm leading-6 text-slate-400">
-                For general questions, account issues, billing questions, or
-                technical support, contact our support team.
+                For general questions, account issues, billing questions,
+                refund inquiries, or technical support, contact our support
+                team by email.
               </p>
 
               <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
                 <p className="text-xs text-slate-500">Support Email</p>
-                <p className="mt-1 text-sm font-medium text-slate-300">
-                  Support email coming soon
-                </p>
+                <a
+                  href={`mailto:${SUPPORT_EMAIL}`}
+                  className="mt-1 inline-block break-all text-sm font-medium text-blue-300 transition hover:text-blue-200 hover:underline"
+                >
+                  {SUPPORT_EMAIL}
+                </a>
               </div>
             </div>
 
@@ -84,17 +136,24 @@ export default function ContactPage() {
               </div>
 
               <h2 className="mt-6 text-xl font-semibold text-white">
-                Business & Partnerships
+                Business &amp; Partnerships
               </h2>
 
               <p className="mt-3 text-sm leading-6 text-slate-400">
                 Interested in partnerships, collaborations, affiliate
-                opportunities, or working with RYNOVIX?
+                opportunities, or working with RYNOVIX? Contact us using
+                the email below.
               </p>
 
-              <p className="mt-5 text-sm font-medium text-purple-300">
-                Business contact coming soon
-              </p>
+              <a
+                href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(
+                  "RYNOVIX Business Inquiry"
+                )}`}
+                className="mt-5 inline-flex items-center gap-2 break-all text-sm font-medium text-purple-300 transition hover:text-purple-200 hover:underline"
+              >
+                {SUPPORT_EMAIL}
+                <ArrowRight className="h-4 w-4 shrink-0" />
+              </a>
             </div>
 
             {/* Response Time */}
@@ -108,7 +167,9 @@ export default function ContactPage() {
                   Response Time
                 </h3>
                 <p className="mt-1 text-sm leading-6 text-slate-400">
-                  We aim to respond to support requests as quickly as possible.
+                  We aim to respond to support requests as soon as possible.
+                  Response times may vary depending on the nature of your
+                  inquiry.
                 </p>
               </div>
             </div>
@@ -156,13 +217,23 @@ export default function ContactPage() {
                 </h3>
 
                 <p className="mt-3 max-w-md text-sm leading-6 text-slate-400">
-                  Thanks for reaching out to RYNOVIX. Our support system will
-                  be connected here soon.
+                  Your message has been saved successfully. For a direct
+                  response, you can also contact us at{" "}
+                  <a
+                    href={`mailto:${SUPPORT_EMAIL}`}
+                    className="text-blue-300 hover:underline"
+                  >
+                    {SUPPORT_EMAIL}
+                  </a>
+                  .
                 </p>
 
                 <button
                   type="button"
-                  onClick={() => setSubmitted(false)}
+                  onClick={() => {
+                    setSubmitted(false);
+                    setSubmitError("");
+                  }}
                   className="mt-7 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-slate-200 transition hover:border-blue-500/30 hover:bg-blue-500/10 hover:text-white"
                 >
                   Send another message
@@ -184,6 +255,8 @@ export default function ContactPage() {
                     name="name"
                     type="text"
                     required
+                    maxLength={100}
+                    autoComplete="name"
                     placeholder="Enter your name"
                     className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-sm text-white outline-none placeholder:text-slate-600 transition focus:border-blue-500/50 focus:bg-white/[0.06] focus:ring-2 focus:ring-blue-500/10"
                   />
@@ -203,6 +276,8 @@ export default function ContactPage() {
                     name="email"
                     type="email"
                     required
+                    maxLength={254}
+                    autoComplete="email"
                     placeholder="you@example.com"
                     className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-sm text-white outline-none placeholder:text-slate-600 transition focus:border-blue-500/50 focus:bg-white/[0.06] focus:ring-2 focus:ring-blue-500/10"
                   />
@@ -234,7 +309,7 @@ export default function ContactPage() {
                       Technical Support
                     </option>
                     <option value="billing" className="bg-[#070d1f]">
-                      Billing & Subscription
+                      Billing &amp; Subscription
                     </option>
                     <option value="business" className="bg-[#070d1f]">
                       Business / Partnership
@@ -258,18 +333,35 @@ export default function ContactPage() {
                     id="message"
                     name="message"
                     required
+                    maxLength={10000}
                     rows={6}
                     placeholder="Tell us how we can help..."
                     className="w-full resize-none rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-sm text-white outline-none placeholder:text-slate-600 transition focus:border-blue-500/50 focus:bg-white/[0.06] focus:ring-2 focus:ring-blue-500/10"
                   />
                 </div>
 
+                {submitError && (
+                  <div
+                    role="alert"
+                    className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-300"
+                  >
+                    {submitError}{" "}
+                    <a
+                      href={`mailto:${SUPPORT_EMAIL}`}
+                      className="font-medium underline underline-offset-2"
+                    >
+                      Email support
+                    </a>
+                  </div>
+                )}
+
                 {/* Submit */}
                 <button
                   type="submit"
-                  className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-900/20 transition duration-300 hover:-translate-y-0.5 hover:from-blue-500 hover:to-purple-500 hover:shadow-blue-900/30"
+                  disabled={isSubmitting}
+                  className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-900/20 transition duration-300 hover:-translate-y-0.5 hover:from-blue-500 hover:to-purple-500 hover:shadow-blue-900/30 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
                 >
-                  Send Message
+                  {isSubmitting ? "Sending..." : "Send Message"}
                   <Send className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
                 </button>
 

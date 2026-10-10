@@ -1,58 +1,59 @@
-"use client"
 
-import { useState } from "react"
-import { ChevronDown, Sparkles } from "lucide-react"
+"use client";
+
+import { useState } from "react";
+import { ChevronDown, Sparkles } from "lucide-react";
 
 type FaqItem = {
-  question: string
-  answer: string
-}
+  question: string;
+  answer: string;
+};
 
 const FAQ_ITEMS: FaqItem[] = [
   {
     question: "What is RYNOVIX?",
     answer:
-      "RYNOVIX is an all-in-one AI platform that helps creators generate, edit, and optimize content faster with a suite of powerful, easy-to-use tools.",
+      "RYNOVIX is an AI platform designed to help creators generate and optimize content with easy-to-use tools for titles, descriptions, hashtags, scripts, SEO, and more.",
   },
   {
     question: "Is there a free plan?",
     answer:
-      "Yes. Our Free plan lets you get started at no cost with 5 AI generations per day and access to 10 tools — no credit card required.",
+      "Yes. Our Free plan includes 100 AI Credits per month and access to 10 AI creator tools at no cost. No credit card is required to get started.",
   },
   {
     question: "Which AI tools are included?",
     answer:
-      "Version 1.0 ships with 10+ tools covering script writing, thumbnails, titles, captions, and more, with new tools added regularly.",
+      "RYNOVIX includes 10 AI creator tools covering title generation, descriptions, hashtags, tags, script writing, Shorts ideas, thumbnail titles, SEO checks, keyword generation, and upload-time suggestions. Tool usage consumes credits according to each tool's credit cost.",
   },
   {
     question: "Can I use it for YouTube?",
     answer:
-      "Absolutely. RYNOVIX is built with YouTube creators in mind, from idea generation to thumbnails, descriptions, and channel growth.",
+      "Absolutely. RYNOVIX is designed with YouTube creators in mind, helping with content ideas, titles, descriptions, tags, hashtags, thumbnails, and SEO.",
   },
   {
     question: "Is my data secure?",
     answer:
-      "Your data is encrypted in transit and at rest, and we never sell your information. Privacy and security are core to everything we build.",
+      "We take data privacy and security seriously. Please review our Privacy Policy for details about how RYNOVIX handles and protects your information.",
   },
   {
     question: "When are new AI tools coming?",
     answer:
-      "We ship new tools and improvements continuously. Pro and Business members get early access to new features as soon as they launch.",
+      "We plan to improve RYNOVIX and introduce additional tools over time. New tools and features will be announced through our Updates page when they become available.",
   },
   {
     question: "How do I upgrade?",
     answer:
-      "You can upgrade to Pro or Business anytime from your dashboard. Changes take effect instantly and you can cancel whenever you like.",
+      "You can choose a Pro or Business plan from the Pricing page. Sign in when prompted and follow the checkout instructions to complete your upgrade. Subscription terms are presented during checkout.",
   },
   {
     question: "Do you offer support?",
     answer:
-      "Yes. Free users get community support, while Pro and Business plans include priority support from our team, available 24/7.",
+      "Free users can access community support. Pro and Business users may receive priority support according to the features included in their selected plan. Visit our Help Center or Contact page for assistance.",
   },
-]
+];
 
 function FaqCard({ item }: { item: FaqItem }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(false);
 
   return (
     <div
@@ -68,7 +69,10 @@ function FaqCard({ item }: { item: FaqItem }) {
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
       >
-        <span className="text-sm font-medium text-slate-100 md:text-base">{item.question}</span>
+        <span className="text-sm font-medium text-slate-100 md:text-base">
+          {item.question}
+        </span>
+
         <ChevronDown
           className={`h-5 w-5 shrink-0 text-slate-400 transition-transform duration-300 group-hover:text-blue-400 ${
             open ? "rotate-180 text-blue-400" : ""
@@ -76,32 +80,42 @@ function FaqCard({ item }: { item: FaqItem }) {
           aria-hidden="true"
         />
       </button>
+
       <div
         className={`grid transition-all duration-300 ease-in-out ${
-          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+          open
+            ? "grid-rows-[1fr] opacity-100"
+            : "grid-rows-[0fr] opacity-0"
         }`}
       >
         <div className="overflow-hidden">
-          <p className="px-5 pb-5 text-sm leading-relaxed text-slate-400">{item.answer}</p>
+          <p className="px-5 pb-5 text-sm leading-relaxed text-slate-400">
+            {item.answer}
+          </p>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 export default function FAQ() {
   return (
-    <section id="faq" className="bg-[#080c1c] py-20 px-4">
+    <section id="faq" className="bg-[#080c1c] px-4 py-20">
       <div className="mx-auto max-w-6xl rounded-3xl border border-[#252B45] bg-[#0a0f24]/60 px-6 py-14 shadow-[0_0_60px_-20px_rgba(59,130,246,0.35)] md:px-10">
         <div className="mx-auto mb-12 max-w-2xl text-center">
           <span className="inline-flex items-center gap-2 rounded-full border border-[#252B45] bg-[#111834] px-4 py-1.5 text-xs font-medium text-slate-300">
-            <Sparkles className="h-5 w-5 text-blue-400" aria-hidden="true" />
+            <Sparkles
+              className="h-5 w-5 text-blue-400"
+              aria-hidden="true"
+            />
             FAQ
           </span>
-          <h2 className="mt-5 bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500 bg-clip-text text-2xl font-bold uppercase tracking-wide text-transparent sm:text-3xl md:text-4xl text-balance">
+
+          <h2 className="mt-5 bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500 bg-clip-text text-2xl font-bold uppercase tracking-wide text-transparent text-balance sm:text-3xl md:text-4xl">
             Frequently Asked Questions
           </h2>
-          <p className="mt-4 text-sm text-slate-400 md:text-base text-pretty">
+
+          <p className="mt-4 text-sm text-slate-400 text-pretty md:text-base">
             Everything you need to know about RYNOVIX and how it works.
           </p>
         </div>
@@ -113,5 +127,5 @@ export default function FAQ() {
         </div>
       </div>
     </section>
-  )
+  );
 }

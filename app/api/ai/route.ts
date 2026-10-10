@@ -1078,6 +1078,82 @@ export async function POST(req: Request) {
       );
     }
 
+        // ----------------------------------------------------------
+    // CREATE AI GENERATION NOTIFICATION
+    // ----------------------------------------------------------
+
+    try {
+      const { data: notificationPreference } =
+        await supabase
+          .from("notification_preferences")
+          .select("ai_generation_complete")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+      // Default to true if preference row does not exist
+      const shouldNotify =
+        notificationPreference?.ai_generation_complete ??
+        true;
+
+      if (shouldNotify) {
+        const toolNames: Record<AIToolId, string> = {
+          "title-generator": "Title Generator",
+          "description-generator":
+            "Description Generator",
+          "hashtag-generator": "Hashtag Generator",
+          "tags-generator": "Tags Generator",
+          "script-writer": "Script Writer",
+          "shorts-ideas": "Shorts Ideas",
+          "thumbnail-title": "Thumbnail Title",
+          "seo-checker": "SEO Checker",
+          "keyword-generator": "Keyword Generator",
+          "best-upload-time": "Best Upload Time",
+        };
+
+        const { data: notificationData, error: notificationError } =
+  
+        await supabase
+    .from("notifications")
+    .insert({
+      user_id: user.id,
+      type: "ai_generation_complete",
+      title: "AI Generation Complete",
+      message: `${toolNames[aiToolId]} finished generating your content.`,
+      link: `/dashboard/tools/${aiToolId}`,
+      metadata: {
+        tool_id: aiToolId,
+        action: action || "generate",
+        credits_used: creditCost,
+      },
+    })
+    .select()
+    .single();
+
+if (notificationError) {
+  console.error(
+    "NOTIFICATION INSERT ERROR:",
+    {
+      message: notificationError.message,
+      details: notificationError.details,
+      hint: notificationError.hint,
+      code: notificationError.code,
+    }
+  );
+} else {
+  console.log(
+    "AI NOTIFICATION CREATED:",
+    notificationData
+  );
+}
+      }
+    } catch (notificationError) {
+      // Notification failure must never break AI generation
+      console.error(
+        "AI notification creation failed:",
+        notificationError
+      );
+    }
+
     // ----------------------------------------------------------
     // SUCCESS RESPONSE
     // ----------------------------------------------------------

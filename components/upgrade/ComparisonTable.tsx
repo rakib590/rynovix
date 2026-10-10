@@ -14,8 +14,8 @@ const features: FeatureRow[] = [
   {
     name: "AI Credits / Month",
     free: "100",
-    pro: "5,000",
-    business: "20,000",
+    pro: "2,000",
+    business: "10,000",
   },
   {
     name: "YouTube Creator Tools",

@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -31,22 +32,22 @@ const faqs: FAQItem[] = [
   {
     question: "Do unused AI credits roll over to the next month?",
     answer:
-      "AI credit rollover depends on the plan and the final RYNOVIX billing policy. The exact rollover rules will be shown before you complete your purchase.",
+      "AI credit rollover depends on your plan and the applicable RYNOVIX billing policy. Please review the applicable credit terms before purchasing a subscription.",
   },
   {
     question: "Is my payment information secure?",
     answer:
-      "Yes. Payment processing will be handled through a secure payment provider. RYNOVIX will not directly store your full card details. Secure checkout and payment-provider protections will be used when payments are enabled.",
+      "Payment processing is handled by Lemon Squeezy through its secure checkout. RYNOVIX does not directly store your full payment card details. Available payment methods are displayed during checkout.",
   },
   {
     question: "Which payment methods will RYNOVIX support?",
     answer:
-      "RYNOVIX is being designed to support international card payments as well as suitable local payment methods such as bKash and other supported gateways. Available methods will depend on your location and the payment providers connected at launch.",
+      "Available payment methods are displayed on the Lemon Squeezy checkout page and may vary depending on your location. Please check the checkout page for the payment methods currently available to you.",
   },
   {
     question: "Can I get a refund after purchasing a plan?",
     answer:
-      "Refund eligibility will depend on the final RYNOVIX refund policy and the payment provider used for the transaction. The applicable refund terms will be clearly displayed before checkout.",
+      "Refund requests are handled according to the RYNOVIX Refund & Cancellation Policy and the applicable terms presented at checkout. Please review our Refund & Cancellation Policy before purchasing a subscription.",
   },
   {
     question: "What happens if my payment fails?",
@@ -61,7 +62,7 @@ const faqs: FAQItem[] = [
   {
     question: "Will I be charged automatically every month or year?",
     answer:
-      "Paid subscriptions are intended to renew automatically according to the billing cycle you select. You can cancel before the next renewal if you do not want the subscription to continue.",
+      "Paid subscriptions renew according to the billing cycle and renewal terms presented at checkout. Please review those terms before completing your purchase. You can manage or cancel your subscription according to the available subscription management options.",
   },
 ];
 
@@ -134,9 +135,7 @@ export default function UpgradeFAQ() {
               {/* Answer */}
               <div
                 className={`grid transition-all duration-200 ${
-                  isOpen
-                    ? "grid-rows-[1fr]"
-                    : "grid-rows-[0fr]"
+                  isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
                 }`}
               >
                 <div className="overflow-hidden">
@@ -155,15 +154,12 @@ export default function UpgradeFAQ() {
       {/* Security Trust Box */}
       <div className="mx-auto mt-8 flex max-w-4xl flex-col gap-4 rounded-2xl border border-green-500/10 bg-green-500/[0.03] p-5 sm:flex-row sm:items-center">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green-500/10">
-          <ShieldCheck
-            size={22}
-            className="text-green-400"
-          />
+          <ShieldCheck size={22} className="text-green-400" />
         </div>
 
         <div>
           <h3 className="text-sm font-semibold text-white">
-            Secure & transparent billing
+            Secure &amp; transparent billing
           </h3>
 
           <p className="mt-1 text-xs leading-5 text-gray-500">

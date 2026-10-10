@@ -1,7 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   Search,
@@ -14,6 +19,8 @@ import {
   Check,
   X,
   Menu,
+  Loader2,
+  Circle,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -22,17 +29,58 @@ interface TopbarProps {
   onMenuClick?: () => void;
 }
 
+type Notification = {
+  id: string;
+  user_id: string;
+  type: string;
+  title: string;
+  message: string;
+  link: string | null;
+  read: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+type Profile = {
+  full_name?: string | null;
+  username?: string | null;
+  avatar_url?: string | null;
+};
+
 export default function Topbar({
   onMenuClick,
 }: TopbarProps) {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
 
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] =
+    useState<Profile | null>(null);
+
   const [menuOpen, setMenuOpen] = useState(false);
+
   const [notificationOpen, setNotificationOpen] =
     useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+
+  const [notifications, setNotifications] =
+    useState<Notification[]>([]);
+
+  const [notificationsLoading, setNotificationsLoading] =
+    useState(true);
+
+  const [markingAllRead, setMarkingAllRead] =
+    useState(false);
+
+  const [markingId, setMarkingId] =
+    useState<string | null>(null);
+
+  const [searchQuery, setSearchQuery] =
+    useState("");
+
+  const menuRef =
+    useRef<HTMLDivElement>(null);
+
+  const notificationRef =
+    useRef<HTMLDivElement>(null);
 
   const tools = [
     {
@@ -103,33 +151,19 @@ export default function Topbar({
       .includes(searchQuery.toLowerCase())
   );
 
-  const notifications = [
-    {
-      id: 1,
-      title: "Welcome to RYNOVIX",
-      message: "Your creator account is ready.",
-      time: "Just now",
-    },
-    {
-      id: 2,
-      title: "New AI tools coming soon",
-      message:
-        "Check the RYNOVIX roadmap for upcoming tools.",
-      time: "Recently",
-    },
-  ];
-
-  const menuRef = useRef<HTMLDivElement>(null);
-  const notificationRef =
-    useRef<HTMLDivElement>(null);
+  const unreadCount = notifications.filter(
+    (notification) => !notification.read
+  ).length;
 
   useEffect(() => {
+    let mounted = true;
+
     async function loadProfile() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user) return;
+      if (!mounted || !user) return;
 
       const { data } = await supabase
         .from("profiles")
@@ -137,14 +171,164 @@ export default function Topbar({
         .eq("id", user.id)
         .maybeSingle();
 
-      setProfile(data);
+      if (mounted) {
+        setProfile(data);
+      }
     }
 
     loadProfile();
+
+    return () => {
+      mounted = false;
+    };
   }, [supabase]);
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
+    let mounted = true;
+
+    async function loadNotifications() {
+      setNotificationsLoading(true);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!mounted) return;
+
+      if (!user) {
+        setNotifications([]);
+        setNotificationsLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("notifications")
+        .select(
+          "id, user_id, type, title, message, link, read, metadata, created_at"
+        )
+        .eq("user_id", user.id)
+        .order("created_at", {
+          ascending: false,
+        })
+        .limit(30);
+
+      if (!mounted) return;
+
+      if (error) {
+        console.error(
+          "Notification loading error:",
+          error
+        );
+
+        setNotifications([]);
+      } else {
+        setNotifications(
+          (data || []) as Notification[]
+        );
+      }
+
+      setNotificationsLoading(false);
+    }
+
+    loadNotifications();
+
+    return () => {
+      mounted = false;
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    let channel:
+      | ReturnType<typeof supabase.channel>
+      | null = null;
+
+    let mounted = true;
+
+    async function setupRealtime() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!mounted || !user) return;
+
+      channel = supabase
+        .channel(`notifications-${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            const newNotification =
+              payload.new as Notification;
+
+            setNotifications((current) => {
+              const exists = current.some(
+                (notification) =>
+                  notification.id ===
+                  newNotification.id
+              );
+
+              if (exists) {
+                return current;
+              }
+
+              return [
+                newNotification,
+                ...current,
+              ].slice(0, 30);
+            });
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            const updatedNotification =
+              payload.new as Notification;
+
+            setNotifications((current) =>
+              current.map((notification) =>
+                notification.id ===
+                updatedNotification.id
+                  ? updatedNotification
+                  : notification
+              )
+            );
+          }
+        )
+        .subscribe((status) => {
+          if (status === "CHANNEL_ERROR") {
+            console.error(
+              "Notification realtime channel error."
+            );
+          }
+        });
+    }
+
+    setupRealtime();
+
+    return () => {
+      mounted = false;
+
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    function handleClickOutside(
+      event: MouseEvent
+    ) {
       const target = event.target as Node;
 
       if (
@@ -175,6 +359,96 @@ export default function Topbar({
     };
   }, []);
 
+  async function markAsRead(
+    notification: Notification
+  ) {
+    if (notification.read || markingId) {
+      return;
+    }
+
+    setMarkingId(notification.id);
+
+    const { error } = await supabase
+      .from("notifications")
+      .update({
+        read: true,
+      })
+      .eq("id", notification.id)
+      .eq("user_id", notification.user_id);
+
+    if (error) {
+      console.error(
+        "Mark notification as read error:",
+        error
+      );
+
+      setMarkingId(null);
+      return;
+    }
+
+    setNotifications((current) =>
+      current.map((item) =>
+        item.id === notification.id
+          ? {
+              ...item,
+              read: true,
+            }
+          : item
+      )
+    );
+
+    setMarkingId(null);
+
+    if (notification.link) {
+      setNotificationOpen(false);
+      router.push(notification.link);
+    }
+  }
+
+  async function markAllAsRead() {
+    if (markingAllRead || unreadCount === 0) {
+      return;
+    }
+
+    setMarkingAllRead(true);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setMarkingAllRead(false);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("notifications")
+      .update({
+        read: true,
+      })
+      .eq("user_id", user.id)
+      .eq("read", false);
+
+    if (error) {
+      console.error(
+        "Mark all notifications as read error:",
+        error
+      );
+
+      setMarkingAllRead(false);
+      return;
+    }
+
+    setNotifications((current) =>
+      current.map((notification) => ({
+        ...notification,
+        read: true,
+      }))
+    );
+
+    setMarkingAllRead(false);
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut();
 
@@ -182,11 +456,96 @@ export default function Topbar({
     router.refresh();
   }
 
+  function formatNotificationTime(
+    dateString: string
+  ) {
+    const date = new Date(dateString);
+    const now = new Date();
+
+    const seconds = Math.floor(
+      (now.getTime() - date.getTime()) / 1000
+    );
+
+    if (seconds < 60) {
+      return "Just now";
+    }
+
+    const minutes = Math.floor(seconds / 60);
+
+    if (minutes < 60) {
+      return `${minutes}m ago`;
+    }
+
+    const hours = Math.floor(minutes / 60);
+
+    if (hours < 24) {
+      return `${hours}h ago`;
+    }
+
+    const days = Math.floor(hours / 24);
+
+    if (days < 7) {
+      return `${days}d ago`;
+    }
+
+    return date.toLocaleDateString();
+  }
+
+  function getNotificationIcon(
+    type: string
+  ) {
+    if (
+      type === "ai_generation" ||
+      type === "ai_generation_complete"
+    ) {
+      return (
+        <Sparkles
+          size={15}
+          className="text-blue-400"
+        />
+      );
+    }
+
+    if (type === "billing") {
+      return (
+        <Sparkles
+          size={15}
+          className="text-green-400"
+        />
+      );
+    }
+
+    if (type === "new_feature") {
+      return (
+        <Bell
+          size={15}
+          className="text-purple-400"
+        />
+      );
+    }
+
+    if (type === "email_update") {
+      return (
+        <Bell
+          size={15}
+          className="text-cyan-400"
+        />
+      );
+    }
+
+    return (
+      <Bell
+        size={15}
+        className="text-blue-400"
+      />
+    );
+  }
+
   return (
     <header className="sticky top-0 z-30 flex min-h-20 shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-[#050814]/80 px-4 py-3 backdrop-blur-md sm:px-6 lg:px-8">
       {/* Left */}
       <div className="flex min-w-0 items-center gap-3">
-        {/* Mobile Menu Button */}
+        {/* Mobile Menu */}
         <button
           type="button"
           onClick={onMenuClick}
@@ -258,29 +617,41 @@ export default function Topbar({
           )}
         </div>
 
-        {/* Notification */}
+        {/* Notifications */}
         <div
           ref={notificationRef}
           className="relative"
         >
           <button
             type="button"
+            aria-label="Notifications"
             onClick={() => {
-              setNotificationOpen((prev) => !prev);
+              setNotificationOpen(
+                (previous) => !previous
+              );
               setMenuOpen(false);
             }}
             className="relative rounded-xl border border-white/10 bg-[#0B1220] p-2.5 text-gray-300 transition hover:border-blue-500 hover:text-white sm:p-3"
           >
             <Bell size={20} />
 
-            {notifications.length > 0 && (
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-blue-500" />
+            {unreadCount > 0 && (
+              <>
+                <span className="absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#050814] bg-blue-500 px-1 text-[9px] font-bold text-white">
+                  {unreadCount > 99
+                    ? "99+"
+                    : unreadCount}
+                </span>
+
+                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-blue-400" />
+              </>
             )}
           </button>
 
           {/* Notification Dropdown */}
           {notificationOpen && (
-            <div className="absolute right-0 top-full mt-3 w-[calc(100vw-2rem)] max-w-80 overflow-hidden rounded-2xl border border-white/10 bg-[#0B1220] shadow-2xl shadow-black/40">
+            <div className="absolute right-0 top-full mt-3 w-[calc(100vw-2rem)] max-w-96 overflow-hidden rounded-2xl border border-white/10 bg-[#0B1220] shadow-2xl shadow-black/40">
+              {/* Header */}
               <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
                 <div>
                   <h3 className="text-sm font-semibold text-white">
@@ -288,13 +659,15 @@ export default function Topbar({
                   </h3>
 
                   <p className="mt-1 text-xs text-gray-500">
-                    {notifications.length} new
-                    notifications
+                    {unreadCount > 0
+                      ? `${unreadCount} unread`
+                      : "All caught up"}
                   </p>
                 </div>
 
                 <button
                   type="button"
+                  aria-label="Close notifications"
                   onClick={() =>
                     setNotificationOpen(false)
                   }
@@ -304,59 +677,149 @@ export default function Topbar({
                 </button>
               </div>
 
-              <div className="max-h-80 overflow-y-auto p-2">
-                {notifications.map(
-                  (notification) => (
-                    <div
-                      key={notification.id}
-                      className="rounded-xl p-3 transition hover:bg-white/5"
-                    >
-                      <div className="flex gap-3">
-                        <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-400">
-                          <Bell size={15} />
+              {/* Content */}
+              <div className="max-h-[22rem] overflow-y-auto p-2">
+                {notificationsLoading ? (
+                  <div className="flex items-center justify-center gap-2 px-4 py-10 text-sm text-gray-400">
+                    <Loader2
+                      size={18}
+                      className="animate-spin"
+                    />
+                    Loading notifications...
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <div className="px-4 py-10 text-center">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white/5">
+                      <Bell
+                        size={20}
+                        className="text-gray-500"
+                      />
+                    </div>
+
+                    <p className="mt-3 text-sm font-medium text-gray-300">
+                      No notifications
+                    </p>
+
+                    <p className="mt-1 text-xs text-gray-500">
+                      You're all caught up.
+                    </p>
+                  </div>
+                ) : (
+                  notifications.map(
+                    (notification) => (
+                      <button
+                        key={notification.id}
+                        type="button"
+                        onClick={() =>
+                          markAsRead(
+                            notification
+                          )
+                        }
+                        disabled={
+                          markingId ===
+                          notification.id
+                        }
+                        className={`group flex w-full gap-3 rounded-xl p-3 text-left transition hover:bg-white/5 ${
+                          notification.read
+                            ? "opacity-70"
+                            : "bg-blue-500/[0.04]"
+                        }`}
+                      >
+                        {/* Icon */}
+                        <div
+                          className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                            notification.read
+                              ? "bg-white/5"
+                              : "bg-blue-500/10"
+                          }`}
+                        >
+                          {markingId ===
+                          notification.id ? (
+                            <Loader2
+                              size={15}
+                              className="animate-spin text-gray-400"
+                            />
+                          ) : (
+                            getNotificationIcon(
+                              notification.type
+                            )
+                          )}
                         </div>
 
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-white">
-                            {notification.title}
-                          </p>
+                        {/* Text */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-medium text-white">
+                              {notification.title}
+                            </p>
+
+                            {!notification.read && (
+                              <Circle
+                                size={7}
+                                fill="currentColor"
+                                className="mt-1.5 shrink-0 text-blue-400"
+                              />
+                            )}
+                          </div>
 
                           <p className="mt-1 text-xs leading-5 text-gray-400">
                             {notification.message}
                           </p>
 
                           <p className="mt-1 text-[11px] text-gray-500">
-                            {notification.time}
+                            {formatNotificationTime(
+                              notification.created_at
+                            )}
                           </p>
                         </div>
-                      </div>
-                    </div>
+                      </button>
+                    )
                   )
                 )}
               </div>
 
-              <div className="border-t border-white/10 p-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setNotificationOpen(false)
-                  }
-                  className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-medium text-gray-400 transition hover:bg-white/5 hover:text-white"
-                >
-                  <Check size={14} />
-                  Mark all as read
-                </button>
-              </div>
+              {/* Footer */}
+              {notifications.length > 0 && (
+                <div className="border-t border-white/10 p-2">
+                  <button
+                    type="button"
+                    onClick={markAllAsRead}
+                    disabled={
+                      markingAllRead ||
+                      unreadCount === 0
+                    }
+                    className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-medium text-gray-400 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {markingAllRead ? (
+                      <Loader2
+                        size={14}
+                        className="animate-spin"
+                      />
+                    ) : (
+                      <Check size={14} />
+                    )}
+
+                    {unreadCount === 0
+                      ? "All notifications read"
+                      : "Mark all as read"}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* User Menu */}
-        <div ref={menuRef} className="relative">
+        <div
+          ref={menuRef}
+          className="relative"
+        >
           <button
             type="button"
             onClick={() =>
-              setMenuOpen((prev) => !prev)
+              setMenuOpen(
+                (previous) => !previous
+              )
             }
             className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#0B1220] p-1.5 transition hover:border-blue-500 sm:gap-3 sm:px-4 sm:py-2"
           >
@@ -380,23 +843,27 @@ export default function Topbar({
             {/* User Info */}
             <div className="hidden text-left md:block">
               <p className="text-sm font-semibold text-white">
-                {profile?.full_name || "Creator"}
+                {profile?.full_name ||
+                  "Creator"}
               </p>
 
               <p className="text-xs text-gray-400">
-                @{profile?.username || "creator"}
+                @{profile?.username ||
+                  "creator"}
               </p>
             </div>
 
             <ChevronDown
               size={16}
               className={`hidden text-gray-400 transition-transform md:block ${
-                menuOpen ? "rotate-180" : ""
+                menuOpen
+                  ? "rotate-180"
+                  : ""
               }`}
             />
           </button>
 
-          {/* Dropdown */}
+          {/* User Dropdown */}
           {menuOpen && (
             <div className="absolute right-0 top-full mt-3 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#0B1220] shadow-2xl shadow-black/40">
               {/* Profile Header */}
@@ -413,18 +880,21 @@ export default function Topbar({
                       <div className="flex h-full w-full items-center justify-center rounded-full bg-blue-600 font-semibold text-white">
                         {profile?.full_name
                           ?.charAt(0)
-                          ?.toUpperCase() || "R"}
+                          ?.toUpperCase() ||
+                          "R"}
                       </div>
                     )}
                   </div>
 
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-white">
-                      {profile?.full_name || "Creator"}
+                      {profile?.full_name ||
+                        "Creator"}
                     </p>
 
                     <p className="truncate text-xs text-gray-400">
-                      @{profile?.username || "creator"}
+                      @{profile?.username ||
+                        "creator"}
                     </p>
                   </div>
                 </div>

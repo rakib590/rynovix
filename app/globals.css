@@ -1,26 +1,547 @@
 @import "tailwindcss";
 
+/* =========================================================
+   ROOT
+========================================================= */
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  --dashboard-bg: #050814;
+  --dashboard-card: #0b1220;
+  --dashboard-card-dark: #050814;
+
+  --accent: #3b82f6;
+  --accent-soft: rgba(59, 130, 246, 0.1);
+  --accent-border: rgba(59, 130, 246, 0.3);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* =========================================================
+   ACCENT VARIABLES
+========================================================= */
+
+html[data-accent="blue"] {
+  --accent: #3b82f6;
+  --accent-soft: rgba(59, 130, 246, 0.1);
+  --accent-border: rgba(59, 130, 246, 0.3);
+}
+
+html[data-accent="purple"] {
+  --accent: #a855f7;
+  --accent-soft: rgba(168, 85, 247, 0.1);
+  --accent-border: rgba(168, 85, 247, 0.3);
+}
+
+html[data-accent="green"] {
+  --accent: #22c55e;
+  --accent-soft: rgba(34, 197, 94, 0.1);
+  --accent-border: rgba(34, 197, 94, 0.3);
+}
+
+html[data-accent="pink"] {
+  --accent: #ec4899;
+  --accent-soft: rgba(236, 72, 153, 0.1);
+  --accent-border: rgba(236, 72, 153, 0.3);
+}
+
+html[data-accent="orange"] {
+  --accent: #f97316;
+  --accent-soft: rgba(249, 115, 22, 0.1);
+  --accent-border: rgba(249, 115, 22, 0.3);
+}
+
+html[data-accent="cyan"] {
+  --accent: #06b6d4;
+  --accent-soft: rgba(6, 182, 212, 0.1);
+  --accent-border: rgba(6, 182, 212, 0.3);
+}
+
+/* =========================================================
+   THEME
+========================================================= */
+
+html[data-resolved-theme="dark"] {
+  --dashboard-bg: #050814;
+  --dashboard-card: #0b1220;
+  --dashboard-card-dark: #050814;
+}
+
+html[data-resolved-theme="light"] {
+  --background: #f5f7fb;
+  --foreground: #111827;
+
+  --dashboard-bg: #f5f7fb;
+  --dashboard-card: #ffffff;
+  --dashboard-card-dark: #eef2f7;
+}
+
+/* =========================================================
+   BODY
+========================================================= */
+
+html,
+body {
+  min-height: 100%;
 }
 
 body {
+  margin: 0;
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* =========================================================
+   DASHBOARD ROOT
+========================================================= */
+
+.dashboard-root {
+  background: var(--dashboard-bg);
+  color: var(--foreground);
+
+  transition:
+    background-color 250ms ease,
+    color 250ms ease;
+}
+
+/* =========================================================
+   DASHBOARD CARDS
+========================================================= */
+
+.dashboard-root .bg-\[\#0B1220\] {
+  background-color: var(--dashboard-card) !important;
+}
+
+.dashboard-root .bg-\[\#050814\] {
+  background-color: var(--dashboard-card-dark) !important;
+}
+
+/* =========================================================
+   LIGHT MODE
+========================================================= */
+
+html[data-resolved-theme="light"] .dashboard-root {
+  color: #111827;
+}
+
+html[data-resolved-theme="light"]
+  .dashboard-root
+  .text-white {
+  color: #111827 !important;
+}
+
+html[data-resolved-theme="light"]
+  .dashboard-root
+  .text-gray-300 {
+  color: #374151 !important;
+}
+
+html[data-resolved-theme="light"]
+  .dashboard-root
+  .text-gray-400 {
+  color: #6b7280 !important;
+}
+
+html[data-resolved-theme="light"]
+  .dashboard-root
+  .text-gray-500 {
+  color: #6b7280 !important;
+}
+
+html[data-resolved-theme="light"]
+  .dashboard-root
+  .text-gray-600 {
+  color: #9ca3af !important;
+}
+
+html[data-resolved-theme="light"]
+  .dashboard-root
+  .border-white\/10 {
+  border-color: rgba(
+    15,
+    23,
+    42,
+    0.1
+  ) !important;
+}
+
+html[data-resolved-theme="light"]
+  .dashboard-root
+  .border-white\/20 {
+  border-color: rgba(
+    15,
+    23,
+    42,
+    0.18
+  ) !important;
+}
+
+html[data-resolved-theme="light"]
+  .dashboard-root
+  input,
+html[data-resolved-theme="light"]
+  .dashboard-root
+  textarea,
+html[data-resolved-theme="light"]
+  .dashboard-root
+  select {
+  color: #111827 !important;
+  background-color: #ffffff !important;
+  border-color: rgba(
+    15,
+    23,
+    42,
+    0.12
+  ) !important;
+}
+
+html[data-resolved-theme="light"]
+  .dashboard-root
+  input::placeholder,
+html[data-resolved-theme="light"]
+  .dashboard-root
+  textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* =========================================================
+   PURPLE ACCENT
+========================================================= */
+
+html[data-accent="purple"]
+  .dashboard-root
+  .text-blue-400,
+html[data-accent="purple"]
+  .dashboard-root
+  .text-blue-500 {
+  color: #a855f7 !important;
+}
+
+html[data-accent="purple"]
+  .dashboard-root
+  .bg-blue-500,
+html[data-accent="purple"]
+  .dashboard-root
+  .bg-blue-600,
+html[data-accent="purple"]
+  .dashboard-root
+  .bg-blue-700 {
+  background-color: #a855f7 !important;
+}
+
+html[data-accent="purple"]
+  .dashboard-root
+  .border-blue-500,
+html[data-accent="purple"]
+  .dashboard-root
+  .border-blue-500\/20,
+html[data-accent="purple"]
+  .dashboard-root
+  .border-blue-500\/30 {
+  border-color: rgba(
+    168,
+    85,
+    247,
+    0.5
+  ) !important;
+}
+
+html[data-accent="purple"]
+  .dashboard-root
+  .bg-blue-500\/10 {
+  background-color: rgba(
+    168,
+    85,
+    247,
+    0.1
+  ) !important;
+}
+
+/* =========================================================
+   GREEN ACCENT
+========================================================= */
+
+html[data-accent="green"]
+  .dashboard-root
+  .text-blue-400,
+html[data-accent="green"]
+  .dashboard-root
+  .text-blue-500 {
+  color: #22c55e !important;
+}
+
+html[data-accent="green"]
+  .dashboard-root
+  .bg-blue-500,
+html[data-accent="green"]
+  .dashboard-root
+  .bg-blue-600,
+html[data-accent="green"]
+  .dashboard-root
+  .bg-blue-700 {
+  background-color: #22c55e !important;
+}
+
+html[data-accent="green"]
+  .dashboard-root
+  .border-blue-500,
+html[data-accent="green"]
+  .dashboard-root
+  .border-blue-500\/20,
+html[data-accent="green"]
+  .dashboard-root
+  .border-blue-500\/30 {
+  border-color: rgba(
+    34,
+    197,
+    94,
+    0.5
+  ) !important;
+}
+
+html[data-accent="green"]
+  .dashboard-root
+  .bg-blue-500\/10 {
+  background-color: rgba(
+    34,
+    197,
+    94,
+    0.1
+  ) !important;
+}
+
+/* =========================================================
+   PINK ACCENT
+========================================================= */
+
+html[data-accent="pink"]
+  .dashboard-root
+  .text-blue-400,
+html[data-accent="pink"]
+  .dashboard-root
+  .text-blue-500 {
+  color: #ec4899 !important;
+}
+
+html[data-accent="pink"]
+  .dashboard-root
+  .bg-blue-500,
+html[data-accent="pink"]
+  .dashboard-root
+  .bg-blue-600,
+html[data-accent="pink"]
+  .dashboard-root
+  .bg-blue-700 {
+  background-color: #ec4899 !important;
+}
+
+html[data-accent="pink"]
+  .dashboard-root
+  .border-blue-500,
+html[data-accent="pink"]
+  .dashboard-root
+  .border-blue-500\/20,
+html[data-accent="pink"]
+  .dashboard-root
+  .border-blue-500\/30 {
+  border-color: rgba(
+    236,
+    72,
+    153,
+    0.5
+  ) !important;
+}
+
+html[data-accent="pink"]
+  .dashboard-root
+  .bg-blue-500\/10 {
+  background-color: rgba(
+    236,
+    72,
+    153,
+    0.1
+  ) !important;
+}
+
+/* =========================================================
+   ORANGE ACCENT
+========================================================= */
+
+html[data-accent="orange"]
+  .dashboard-root
+  .text-blue-400,
+html[data-accent="orange"]
+  .dashboard-root
+  .text-blue-500 {
+  color: #f97316 !important;
+}
+
+html[data-accent="orange"]
+  .dashboard-root
+  .bg-blue-500,
+html[data-accent="orange"]
+  .dashboard-root
+  .bg-blue-600,
+html[data-accent="orange"]
+  .dashboard-root
+  .bg-blue-700 {
+  background-color: #f97316 !important;
+}
+
+html[data-accent="orange"]
+  .dashboard-root
+  .border-blue-500,
+html[data-accent="orange"]
+  .dashboard-root
+  .border-blue-500\/20,
+html[data-accent="orange"]
+  .dashboard-root
+  .border-blue-500\/30 {
+  border-color: rgba(
+    249,
+    115,
+    22,
+    0.5
+  ) !important;
+}
+
+html[data-accent="orange"]
+  .dashboard-root
+  .bg-blue-500\/10 {
+  background-color: rgba(
+    249,
+    115,
+    22,
+    0.1
+  ) !important;
+}
+
+/* =========================================================
+   CYAN ACCENT
+========================================================= */
+
+html[data-accent="cyan"]
+  .dashboard-root
+  .text-blue-400,
+html[data-accent="cyan"]
+  .dashboard-root
+  .text-blue-500 {
+  color: #06b6d4 !important;
+}
+
+html[data-accent="cyan"]
+  .dashboard-root
+  .bg-blue-500,
+html[data-accent="cyan"]
+  .dashboard-root
+  .bg-blue-600,
+html[data-accent="cyan"]
+  .dashboard-root
+  .bg-blue-700 {
+  background-color: #06b6d4 !important;
+}
+
+html[data-accent="cyan"]
+  .dashboard-root
+  .border-blue-500,
+html[data-accent="cyan"]
+  .dashboard-root
+  .border-blue-500\/20,
+html[data-accent="cyan"]
+  .dashboard-root
+  .border-blue-500\/30 {
+  border-color: rgba(
+    6,
+    182,
+    212,
+    0.5
+  ) !important;
+}
+
+html[data-accent="cyan"]
+  .dashboard-root
+  .bg-blue-500\/10 {
+  background-color: rgba(
+    6,
+    182,
+    212,
+    0.1
+  ) !important;
+}
+
+/* =========================================================
+   COMPACT / COMFORTABLE
+========================================================= */
+
+.dashboard-content {
+  transition:
+    padding 250ms ease,
+    gap 250ms ease;
+}
+
+.dashboard-compact .dashboard-content {
+  padding-top: 1rem !important;
+  padding-bottom: 1rem !important;
+}
+
+.dashboard-compact
+  .space-y-8
+  > :not([hidden])
+  ~ :not([hidden]) {
+  margin-top: 1rem !important;
+}
+
+.dashboard-compact
+  .space-y-6
+  > :not([hidden])
+  ~ :not([hidden]) {
+  margin-top: 0.75rem !important;
+}
+
+.dashboard-compact .gap-8 {
+  gap: 1rem !important;
+}
+
+.dashboard-compact .gap-6 {
+  gap: 0.75rem !important;
+}
+
+.dashboard-compact .p-8 {
+  padding: 1rem !important;
+}
+
+.dashboard-compact .p-6 {
+  padding: 1rem !important;
+}
+
+.dashboard-compact .p-5 {
+  padding: 0.875rem !important;
+}
+
+/* =========================================================
+   TRANSITIONS
+========================================================= */
+
+.dashboard-root,
+.dashboard-root > *,
+.dashboard-root button,
+.dashboard-root input,
+.dashboard-root textarea,
+.dashboard-root select,
+.dashboard-root section,
+.dashboard-root div {
+  transition:
+    background-color 250ms ease,
+    border-color 250ms ease,
+    color 250ms ease,
+    box-shadow 250ms ease;
 }
