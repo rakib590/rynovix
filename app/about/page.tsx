@@ -10,7 +10,7 @@ WandSparkles,
 Zap,
 } from "lucide-react";
 
-const SUPPORT_EMAIL = "[rynovix.support@gmail.com](mailto:rynovix.support@gmail.com)";
+const SUPPORT_EMAIL = "rynovix.support@gmail.com";
 
 const highlights = [
 {

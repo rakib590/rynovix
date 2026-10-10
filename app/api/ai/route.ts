@@ -1111,7 +1111,6 @@ export async function POST(req: Request) {
         };
 
         const { data: notificationData, error: notificationError } =
-  
         await supabase
     .from("notifications")
     .insert({
