@@ -1,473 +1,351 @@
+
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Clock, Monitor } from "lucide-react";
+import {
+  ArrowLeft,
+  Clock,
+  Monitor,
+  Globe,
+  MapPin,
+  Wifi,
+  Laptop,
+  LogOut,
+  ShieldCheck,
+} from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
+type LoginHistoryPageProps = {
+  params: Promise<{ id: string }>;
+};
 
 export default async function LoginHistoryPage({
   params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-
-
+}: LoginHistoryPageProps) {
   const { id } = await params;
-
-
   const supabase = await createClient();
 
-
-
-
+  // Get user profile
   const {
     data: user,
-    error:userError,
+    error: userError,
   } = await supabase
     .from("profiles")
-    .select(
-      `
-      id,
-      full_name,
-      email
-      `
-    )
-    .eq(
-      "id",
-      id
-    )
+    .select("id, full_name, email")
+    .eq("id", id)
     .single();
 
-
-
-
-  if(userError || !user){
-
+  if (userError || !user) {
     notFound();
-
   }
 
-
-
-
-
+  // Fetch real login history from Supabase
   const {
     data: history,
-    error,
+    error: historyError,
   } = await supabase
     .from("login_history")
-    .select(
-      `
+    .select(`
       id,
       login_time,
       logout_time,
       device,
+      device_type,
       browser,
+      os,
       ip_address,
+      country,
+      city,
+      isp,
       status
-      `
-    )
-    .eq(
-      "user_id",
-      id
-    )
-    .order(
-      "login_time",
-      {
-        ascending:false,
-      }
-    );
+    `)
+    .eq("user_id", id)
+    .order("login_time", { ascending: false });
 
+  if (historyError) {
+    console.error("ADMIN LOGIN HISTORY ERROR:", historyError);
+  }
 
+  const records = history ?? [];
+  const successfulLogins = records.filter(
+    (item) => item.status?.toLowerCase() === "success"
+  ).length;
 
-
-  console.log(
-    "LOGIN HISTORY ERROR:",
-    error
-  );
-
-
-
-
+  const latestLogin = records[0]?.login_time;
 
   return (
-
-    <div
-      className="
-      min-h-screen
-      bg-black
-      px-6
-      py-10
-      text-white
-      "
-    >
-
-
-      <div
-        className="
-        mx-auto
-        max-w-5xl
-        "
-      >
-
-
-
+    <main className="min-h-screen bg-[#060B1A] px-4 py-8 text-white sm:px-6 sm:py-10">
+      <div className="mx-auto max-w-6xl">
         <Link
           href={`/admin/users/${id}`}
-          className="
-          mb-8
-          inline-flex
-          items-center
-          gap-2
-          text-gray-400
-          hover:text-white
-          "
+          className="mb-7 inline-flex items-center gap-2 text-sm text-gray-400 transition hover:text-white"
         >
-
-          <ArrowLeft size={18}/>
-
+          <ArrowLeft size={18} />
           Back to User
-
         </Link>
 
+        <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/15 text-blue-400">
+                <ShieldCheck size={25} />
+              </div>
 
+              <h1 className="text-2xl font-bold sm:text-3xl">
+                Login History
+              </h1>
 
+              <p className="mt-2 text-sm text-gray-400">
+                Real authentication records and login locations.
+              </p>
+            </div>
 
+            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-gray-300">
+              <span className="h-2 w-2 rounded-full bg-green-400" />
+              Live database records
+            </span>
+          </div>
 
-
-
-        <div
-          className="
-          rounded-3xl
-          border
-          border-white/10
-          bg-white/5
-          p-8
-          "
-        >
-
-
-
-          <h1
-            className="
-            text-3xl
-            font-bold
-            "
-          >
-            Login History
-          </h1>
-
-
-
-          <p
-            className="
-            mt-2
-            text-gray-400
-            "
-          >
-            View user login activity
-          </p>
-
-
-
-
-
-
-
-          <div
-            className="
-            mt-8
-            rounded-2xl
-            border
-            border-white/10
-            bg-black/30
-            p-5
-            "
-          >
-
-
-            <p className="text-gray-400 text-sm">
-              User
+          {/* User information */}
+          <div className="mt-8 rounded-2xl border border-white/10 bg-black/20 p-5">
+            <p className="text-xs uppercase tracking-wider text-gray-500">
+              User account
             </p>
-
 
             <h2 className="mt-2 text-xl font-semibold">
               {user.full_name || "No Name"}
             </h2>
 
-
-            <p className="text-gray-400">
-              {user.email}
+            <p className="mt-1 break-all text-sm text-gray-400">
+              {user.email || "No email"}
             </p>
 
-
+            <p className="mt-3 break-all text-xs text-gray-500">
+              User ID: {user.id}
+            </p>
           </div>
 
+          {/* Summary cards */}
+          <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            <SummaryCard
+              title="Total Records"
+              value={String(records.length)}
+              icon={<Clock size={20} />}
+            />
 
+            <SummaryCard
+              title="Successful Logins"
+              value={String(successfulLogins)}
+              icon={<ShieldCheck size={20} />}
+            />
 
+            <SummaryCard
+              title="Latest Login"
+              value={latestLogin ? formatDate(latestLogin) : "No login"}
+              icon={<LogOut size={20} />}
+            />
+          </div>
 
+          {/* Error message */}
+          {historyError && (
+            <div className="mt-6 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
+              Failed to load login history. Check Supabase permissions
+              and the server logs.
+            </div>
+          )}
 
+          {/* History records */}
+          <div className="mt-8">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold">Login records</h2>
 
+              <span className="text-sm text-gray-400">
+                {records.length} record{records.length === 1 ? "" : "s"}
+              </span>
+            </div>
 
+            {records.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-5 py-12 text-center">
+                <Clock className="mx-auto mb-3 text-gray-500" size={32} />
 
+                <h3 className="font-medium">No login history found</h3>
 
-          <div className="mt-8 space-y-4">
-
-
-
-            {
-              !history ||
-              history.length === 0
-
-              ?
-
-
-              <div
-                className="
-                rounded-2xl
-                border
-                border-white/10
-                bg-black/30
-                p-6
-                text-center
-                text-gray-400
-                "
-              >
-
-                No login history found.
-
+                <p className="mt-2 text-sm text-gray-500">
+                  No records are available for this user, or the database
+                  query could not return any records.
+                </p>
               </div>
-
-
-
-              :
-
-
-
-              history.map((item)=>(
-
-
-                <div
-                  key={item.id}
-                  className="
-                  rounded-2xl
-                  border
-                  border-white/10
-                  bg-black/30
-                  p-5
-                  "
-                >
-
-
-
-                  <div
-                    className="
-                    flex
-                    flex-col
-                    gap-4
-                    sm:flex-row
-                    sm:items-center
-                    sm:justify-between
-                    "
+            ) : (
+              <div className="space-y-4">
+                {records.map((item) => (
+                  <article
+                    key={item.id}
+                    className="rounded-2xl border border-white/10 bg-black/20 p-5 transition hover:border-white/20 sm:p-6"
                   >
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
+                          <Clock size={20} />
+                        </div>
 
+                        <div>
+                          <h3 className="font-semibold">Login event</h3>
 
+                          <p className="mt-1 text-sm text-gray-400">
+                            {formatDate(item.login_time)}
+                          </p>
 
-
-                    <div
-                      className="
-                      flex
-                      items-center
-                      gap-3
-                      "
-                    >
-
-                      <Clock
-                        size={20}
-                        className="text-blue-400"
-                      />
-
-
-
-                      <div>
-
-                        <p className="font-semibold">
-                          Login
-                        </p>
-
-
-                        <p className="text-sm text-gray-400">
-
-                          {
-                            new Date(
-                              item.login_time
-                            )
-                            .toLocaleString()
-                          }
-
-                        </p>
-
-
+                          <p className="mt-1 text-xs text-gray-500">
+                            {item.logout_time
+                              ? `Logout: ${formatDate(item.logout_time)}`
+                              : "Logout time not recorded"}
+                          </p>
+                        </div>
                       </div>
 
-
+                      <StatusBadge status={item.status} />
                     </div>
 
-
-
-
-
-
-
-
-                    <div
-                      className="
-                      flex
-                      items-center
-                      gap-3
-                      "
-                    >
-
-                      <Monitor
-                        size={18}
-                        className="text-gray-400"
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      <Info
+                        title="Device"
+                        value={item.device || "Unknown"}
+                        icon={<Laptop size={17} />}
                       />
 
-                      <span
-                        className="
-                        rounded-full
-                        bg-green-500/20
-                        px-3
-                        py-1
-                        text-xs
-                        text-green-400
-                        "
-                      >
-                        {item.status}
-                      </span>
+                      <Info
+                        title="Device Type"
+                        value={item.device_type || "Unknown"}
+                        icon={<Monitor size={17} />}
+                      />
 
+                      <Info
+                        title="Browser"
+                        value={item.browser || "Unknown"}
+                        icon={<Globe size={17} />}
+                      />
 
+                      <Info
+                        title="Operating System"
+                        value={item.os || "Unknown"}
+                        icon={<Monitor size={17} />}
+                      />
+
+                      <Info
+                        title="IP Address"
+                        value={item.ip_address || "Unavailable"}
+                        icon={<Wifi size={17} />}
+                      />
+
+                      <Info
+                        title="Country"
+                        value={item.country || "Unavailable"}
+                        icon={<Globe size={17} />}
+                      />
+
+                      <Info
+                        title="City"
+                        value={item.city || "Unavailable"}
+                        icon={<MapPin size={17} />}
+                      />
+
+                      <Info
+                        title="Internet Provider (ISP)"
+                        value={item.isp || "Unavailable"}
+                        icon={<Wifi size={17} />}
+                      />
                     </div>
-
-
-
-                  </div>
-
-
-
-
-
-
-                  <div
-                    className="
-                    mt-4
-                    grid
-                    gap-3
-                    sm:grid-cols-3
-                    "
-                  >
-
-
-                    <Info
-                      title="Device"
-                      value={
-                        item.device ||
-                        "Unknown"
-                      }
-                    />
-
-
-                    <Info
-                      title="Browser"
-                      value={
-                        item.browser ||
-                        "Unknown"
-                      }
-                    />
-
-
-                    <Info
-                      title="IP"
-                      value={
-                        item.ip_address ||
-                        "-"
-                      }
-                    />
-
-
-                  </div>
-
-
-
-
-
-                </div>
-
-
-              ))
-
-            }
-
-
-
+                  </article>
+                ))}
+              </div>
+            )}
           </div>
-
-
-
-
-        </div>
-
-
-
+        </section>
       </div>
-
-
-    </div>
-
-
+    </main>
   );
-
 }
 
+function formatDate(value: string | null) {
+  if (!value) return "Unavailable";
 
+  const date = new Date(value);
 
+  if (Number.isNaN(date.getTime())) {
+    return "Invalid date";
+  }
 
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "medium",
+    timeZone: "Asia/Dhaka",
+  }).format(date);
+}
+
+function SummaryCard({
+  title,
+  value,
+  icon,
+}: {
+  title: string;
+  value: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="flex items-center gap-2 text-blue-400">
+        {icon}
+        <span className="text-sm text-gray-400">{title}</span>
+      </div>
+
+      <p className="mt-3 break-words text-xl font-bold">{value}</p>
+    </div>
+  );
+}
 
 function Info({
   title,
   value,
-}:{
-  title:string;
-  value:string;
-}){
+  icon,
+}: {
+  title: string;
+  value: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="flex items-center gap-2 text-gray-500">
+        {icon}
+        <p className="text-xs">{title}</p>
+      </div>
 
+      <p className="mt-2 break-words text-sm font-medium text-gray-200">
+        {value}
+      </p>
+    </div>
+  );
+}
 
-return (
+function StatusBadge({ status }: { status: string | null }) {
+  const normalizedStatus = status?.toLowerCase() || "unknown";
+  const isSuccess = normalizedStatus === "success";
 
-<div
-className="
-rounded-xl
-border
-border-white/10
-bg-white/5
-p-4
-"
->
-
-
-<p className="text-xs text-gray-400">
-{title}
-</p>
-
-
-<p className="mt-1 text-sm">
-{value}
-</p>
-
-
-</div>
-
-);
-
-
+  return (
+    <span
+      className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium ${
+        isSuccess
+          ? "bg-green-500/10 text-green-400"
+          : "bg-yellow-500/10 text-yellow-400"
+      }`}
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${
+          isSuccess ? "bg-green-400" : "bg-yellow-400"
+        }`}
+      />
+      {status || "unknown"}
+    </span>
+  );
 }
