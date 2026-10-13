@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 type GeoResult = {
   success?: boolean;
+  message?: string;
   country?: string;
   city?: string;
   connection?: {
@@ -22,37 +23,86 @@ function clean(value: string | null | undefined): string | null {
   return result && result.length <= 200 ? result : null;
 }
 
+function isPublicIp(value: string): boolean {
+  const version = isIP(value);
+  if (!version) return false;
+
+  if (version === 4) {
+    const [a, b, c] = value.split(".").map(Number);
+
+    if (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 192 && b === 0 && c === 0) ||
+      (a === 198 && (b === 18 || b === 19)) ||
+      (a === 198 && b === 51 && c === 100) ||
+      (a === 203 && b === 0 && c === 113)
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  const ip = value.toLowerCase();
+
+  if (
+    ip === "::" ||
+    ip === "::1" ||
+    ip.startsWith("fc") ||
+    ip.startsWith("fd") ||
+    ip.startsWith("fe8") ||
+    ip.startsWith("fe9") ||
+    ip.startsWith("fea") ||
+    ip.startsWith("feb")
+  ) {
+    return false;
+  }
+
+  const mapped = ip.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+
+  if (mapped) return isPublicIp(mapped[1]);
+
+  return true;
+}
+
 function getClientIp(request: Request): string | null {
-  const candidates = [
-    request.headers.get("x-real-ip"),
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim(),
+  const headers = [
+    "x-vercel-forwarded-for",
+    "x-forwarded-for",
+    "x-real-ip",
+    "cf-connecting-ip",
   ];
 
-  for (const candidate of candidates) {
-    const ip = clean(candidate);
+  for (const header of headers) {
+    const value = request.headers.get(header);
+    if (!value) continue;
 
-    if (!ip || isIP(ip) === 0) continue;
+    for (const candidate of value.split(",")) {
+      const ip = candidate.trim();
 
-    const lower = ip.toLowerCase();
-
-    const privateIPv4 =
-      /^(10\.|127\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(
-        lower
-      );
-
-    const privateIPv6 =
-      lower === "::1" ||
-      lower === "::" ||
-      lower.startsWith("fc") ||
-      lower.startsWith("fd") ||
-      lower.startsWith("fe80:");
-
-    if (privateIPv4 || privateIPv6) return null;
-
-    return ip;
+      if (isPublicIp(ip)) return ip;
+    }
   }
 
   return null;
+}
+
+function getHeaderValue(value: string | null): string | null {
+  const raw = clean(value);
+  if (!raw) return null;
+
+  try {
+    return clean(decodeURIComponent(raw)) ?? raw;
+  } catch {
+    return raw;
+  }
 }
 
 function getDevice(userAgent: string) {
@@ -62,9 +112,7 @@ function getDevice(userAgent: string) {
 
   if (/ipad|tablet|kindle|playbook/.test(ua)) {
     deviceType = "Tablet";
-  } else if (
-    /mobile|iphone|ipod|android|windows phone/.test(ua)
-  ) {
+  } else if (/mobile|iphone|ipod|android|windows phone/.test(ua)) {
     deviceType = "Mobile";
   }
 
@@ -84,7 +132,61 @@ function getDevice(userAgent: string) {
     os = "Linux";
   }
 
-  return { deviceType, os };
+  let browser = "Unknown Browser";
+
+  if (/edg/i.test(userAgent)) {
+    browser = "Microsoft Edge";
+  } else if (/opr|opera/i.test(userAgent)) {
+    browser = "Opera";
+  } else if (/firefox/i.test(userAgent)) {
+    browser = "Mozilla Firefox";
+  } else if (/chrome|crios/i.test(userAgent)) {
+    browser = "Google Chrome";
+  } else if (/safari/i.test(userAgent)) {
+    browser = "Safari";
+  }
+
+  return { deviceType, os, browser };
+}
+
+async function getIpDetails(ip: string | null) {
+  const details = {
+    country: null as string | null,
+    city: null as string | null,
+    isp: null as string | null,
+  };
+
+  if (!ip) return details;
+
+  try {
+    const response = await fetch(
+      `https://ipwho.is/${encodeURIComponent(ip)}`,
+      {
+        cache: "no-store",
+        signal: AbortSignal.timeout(4000),
+      }
+    );
+
+    if (!response.ok) {
+      console.error("IP LOOKUP HTTP ERROR:", response.status);
+      return details;
+    }
+
+    const geo = (await response.json()) as GeoResult;
+
+    if (geo.success === false) {
+      console.error("IP LOOKUP FAILED:", geo.message ?? "Unknown error");
+      return details;
+    }
+
+    details.country = clean(geo.country);
+    details.city = clean(geo.city);
+    details.isp = clean(geo.connection?.isp) ?? clean(geo.connection?.org);
+  } catch (error) {
+    console.error("IP LOOKUP ERROR:", error);
+  }
+
+  return details;
 }
 
 export async function POST(request: Request) {
@@ -129,46 +231,27 @@ export async function POST(request: Request) {
     }
 
     const ipAddress = getClientIp(request);
-    const userAgent =
-      clean(request.headers.get("user-agent")) ?? "Unknown";
+    const userAgent = clean(request.headers.get("user-agent")) ?? "";
+    const { deviceType, os, browser } = getDevice(userAgent);
 
-    const { deviceType, os } = getDevice(userAgent);
+    console.info("LOGIN HISTORY DIAGNOSTICS:", {
+      ipFound: Boolean(ipAddress),
+      ipVersion: ipAddress ? isIP(ipAddress) : 0,
+      vercelCountryPresent: Boolean(
+        request.headers.get("x-vercel-ip-country")
+      ),
+      vercelCityPresent: Boolean(request.headers.get("x-vercel-ip-city")),
+    });
 
-    let country = clean(
-      request.headers.get("x-vercel-ip-country")
-    );
+    const ipDetails = await getIpDetails(ipAddress);
 
-    let city = clean(
-      request.headers.get("x-vercel-ip-city")
-    );
+    const country =
+      getHeaderValue(request.headers.get("x-vercel-ip-country")) ??
+      ipDetails.country;
 
-    let isp: string | null = null;
-
-    if (ipAddress) {
-      try {
-        const response = await fetch(
-          `https://ipwho.is/${encodeURIComponent(ipAddress)}`,
-          {
-            cache: "no-store",
-            signal: AbortSignal.timeout(2500),
-          }
-        );
-
-        if (response.ok) {
-          const geo = (await response.json()) as GeoResult;
-
-          if (geo.success) {
-            country = country ?? clean(geo.country);
-            city = city ?? clean(geo.city);
-            isp =
-              clean(geo.connection?.isp) ??
-              clean(geo.connection?.org);
-          }
-        }
-      } catch {
-        // Geolocation is optional. Never block login because of it.
-      }
-    }
+    const city =
+      getHeaderValue(request.headers.get("x-vercel-ip-city")) ??
+      ipDetails.city;
 
     const userClient = createClient(supabaseUrl, supabaseKey, {
       auth: {
@@ -189,19 +272,16 @@ export async function POST(request: Request) {
         ip_address: ipAddress,
         country,
         city,
-        isp,
+        isp: ipDetails.isp,
         device_type: deviceType,
         os,
         device: deviceType,
-        browser: userAgent,
+        browser,
         status: "success",
       });
 
     if (insertError) {
-      console.error(
-        "LOGIN HISTORY INSERT ERROR:",
-        insertError.message
-      );
+      console.error("LOGIN HISTORY INSERT ERROR:", insertError.message);
 
       return NextResponse.json(
         { error: "Could not save login history." },
@@ -209,7 +289,13 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      ipFound: Boolean(ipAddress),
+      countryFound: Boolean(country),
+      cityFound: Boolean(city),
+      ispFound: Boolean(ipDetails.isp),
+    });
   } catch (error) {
     console.error("LOGIN HISTORY API ERROR:", error);
 
