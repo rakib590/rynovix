@@ -1,24 +1,20 @@
-import DashboardLayout from "@/components/dashboard/DashboardLayout";
-
 import HistoryHeader from "@/components/history/HistoryHeader";
 import HistoryStats from "@/components/history/HistoryStats";
 import HistoryTable from "@/components/history/HistoryTable";
 
 export default function HistoryPage() {
   return (
-    <DashboardLayout>
-      <div className="space-y-8">
-        
-        {/* Header */}
-        <HistoryHeader />
+    <div className="space-y-8">
 
-        {/* Stats */}
-        <HistoryStats />
+      {/* Header */}
+      <HistoryHeader />
 
-        {/* History List + Search + Filters */}
-        <HistoryTable />
+      {/* Stats */}
+      <HistoryStats />
 
-      </div>
-    </DashboardLayout>
+      {/* History List + Search + Filters */}
+      <HistoryTable />
+
+    </div>
   );
 }

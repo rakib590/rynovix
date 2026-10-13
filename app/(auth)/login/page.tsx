@@ -10,9 +10,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // --------------------------------
-  // Preserve the destination
-  // --------------------------------
+  // Preserve and validate destination
   const rawNext = searchParams.get("next");
 
   const next =
@@ -25,96 +23,243 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // ------------------------
-  // Email Login
-  // ------------------------
+  // --------------------------------
+  // Email / Password Login
+  // --------------------------------
   const handleLogin = async () => {
+    if (loading) return;
+
     const supabase = createClient();
 
     setLoading(true);
     setErrorMessage("");
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      setLoading(false);
-      setErrorMessage(error.message);
-      return;
-    }
-
-    // --------------------------------
-    // Record successful login activity
-    // --------------------------------
     try {
-      await fetch("/auth/login-activity", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          loginMethod: "email",
-        }),
-      });
+      // Step 1: Authenticate user
+      const { data, error } =
+        await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+
+      if (error || !data.user) {
+        setErrorMessage(
+          error?.message || "Unable to sign in. Please try again."
+        );
+        return;
+      }
+
+      // Step 2: Record existing login activity
+      // Failure here must not prevent login.
+      try {
+        const activityResponse = await fetch(
+          "/auth/login-activity",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              loginMethod: "email",
+            }),
+          }
+        );
+
+        if (!activityResponse.ok) {
+          console.error(
+            "LOGIN ACTIVITY REQUEST FAILED:",
+            activityResponse.status
+          );
+        }
+      } catch (activityError) {
+        console.error(
+          "LOGIN ACTIVITY REQUEST FAILED:",
+          activityError
+        );
+      }
+
+      // Step 3: Save detailed login history on the server
+      // The API verifies the authenticated user's access token.
+      try {
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error(
+            "LOGIN HISTORY SESSION ERROR:",
+            sessionError.message
+          );
+        } else if (session?.access_token) {
+          const historyResponse = await fetch(
+            "/api/login-history",
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              cache: "no-store",
+            }
+          );
+
+          if (!historyResponse.ok) {
+            const responseText =
+              await historyResponse.text();
+
+            console.error(
+              "LOGIN HISTORY REQUEST FAILED:",
+              historyResponse.status,
+              responseText
+            );
+          } else {
+            console.log("LOGIN HISTORY SAVED");
+          }
+        }
+      } catch (historyError) {
+        // History failure must not interrupt authentication.
+        console.error(
+          "LOGIN HISTORY ERROR:",
+          historyError
+        );
+      }
+
+      // Step 4: Check current user's role and account status
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        await supabase.auth.signOut();
+
+        setErrorMessage(
+          "Unable to verify your account. Please sign in again."
+        );
+        return;
+      }
+
+      const {
+        data: profile,
+        error: profileError,
+      } = await supabase
+        .from("profiles")
+        .select("role,status")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error(
+          "PROFILE LOOKUP ERROR:",
+          profileError.message
+        );
+
+        setErrorMessage(
+          "Unable to verify your account status. Please try again."
+        );
+
+        // Fail closed: do not redirect without verifying status.
+        await supabase.auth.signOut();
+        return;
+      }
+
+      if (!profile) {
+        setErrorMessage(
+          "Your account profile could not be found. Please contact support."
+        );
+
+        await supabase.auth.signOut();
+        return;
+      }
+
+      // Step 5: Block suspended users
+      if (profile.status === "suspended") {
+        await supabase.auth.signOut();
+
+        setErrorMessage(
+          "Your account has been suspended. Please contact support."
+        );
+
+        return;
+      }
+
+      // Step 6: Redirect according to role
+      if (
+        profile.status === "active" &&
+        (
+          profile.role === "admin" ||
+          profile.role === "super_admin"
+        )
+      ) {
+        router.replace("/admin");
+      } else {
+        router.replace(next);
+      }
+
+      router.refresh();
     } catch (error) {
-      // Login should still continue even if activity logging fails.
-      console.error(
-        "LOGIN ACTIVITY REQUEST FAILED:",
-        error
+      console.error("LOGIN ERROR:", error);
+
+      setErrorMessage(
+        "Something went wrong. Please try again."
       );
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
-
-    // Go to the page/tool the user originally wanted
-    router.replace(next);
-    router.refresh();
   };
 
-  // ------------------------
-  // Google Login
-  // ------------------------
+  // --------------------------------
+  // Google OAuth Login
+  // --------------------------------
   const handleGoogleLogin = async () => {
+    if (loading) return;
+
     const supabase = createClient();
 
     setErrorMessage("");
     setLoading(true);
 
-    const redirectTo =
-      `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+    try {
+      const redirectTo =
+        `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
 
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo,
-      },
-    });
+      const { data, error } =
+        await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo,
+          },
+        });
 
-    if (error) {
-      setLoading(false);
-      setErrorMessage(error.message);
-      return;
-    }
+      if (error) {
+        setErrorMessage(error.message);
+        setLoading(false);
+        return;
+      }
 
-    console.log("OAuth Data:", data);
-    console.log("OAuth Redirect:", redirectTo);
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        setErrorMessage(
+          "Unable to start Google login. Please try again."
+        );
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error("GOOGLE LOGIN ERROR:", error);
 
-    if (data?.url) {
-      window.location.href = data.url;
-    } else {
+      setErrorMessage(
+        "Unable to connect to Google. Please try again."
+      );
+
       setLoading(false);
     }
   };
 
-  // ------------------------
   // Signup URL
-  // ------------------------
   const signupUrl =
     next === "/dashboard"
       ? "/signup"
@@ -143,6 +288,7 @@ function LoginForm() {
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 48 48"
               className="h-5 w-5"
+              aria-hidden="true"
             >
               <path
                 fill="#FFC107"
@@ -162,7 +308,9 @@ function LoginForm() {
               />
             </svg>
 
-            {loading ? "Connecting..." : "Continue with Google"}
+            {loading
+              ? "Connecting..."
+              : "Continue with Google"}
           </button>
         </div>
 
@@ -180,22 +328,29 @@ function LoginForm() {
         {/* Email Login Form */}
         <form
           className="space-y-5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleLogin();
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleLogin();
           }}
         >
           {/* Email */}
           <div>
-            <label className="text-sm text-gray-300">
+            <label
+              htmlFor="login-email"
+              className="text-sm text-gray-300"
+            >
               Email
             </label>
 
             <input
+              id="login-email"
               type="email"
               placeholder="Enter your email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(event) =>
+                setEmail(event.target.value)
+              }
+              autoComplete="email"
               required
               disabled={loading}
               className="mt-2 w-full rounded-lg border border-gray-700 bg-[#0b1220] px-4 py-3 text-white outline-none transition focus:border-blue-500 disabled:opacity-50"
@@ -204,16 +359,23 @@ function LoginForm() {
 
           {/* Password */}
           <div>
-            <label className="text-sm text-gray-300">
+            <label
+              htmlFor="login-password"
+              className="text-sm text-gray-300"
+            >
               Password
             </label>
 
             <div className="relative mt-2">
               <input
+                id="login-password"
                 type={showPassword ? "text" : "password"}
                 placeholder="Enter your password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(event) =>
+                  setPassword(event.target.value)
+                }
+                autoComplete="current-password"
                 required
                 disabled={loading}
                 className="w-full rounded-lg border border-gray-700 bg-[#0b1220] px-4 py-3 pr-12 text-white outline-none transition focus:border-blue-500 disabled:opacity-50"
@@ -222,7 +384,7 @@ function LoginForm() {
               <button
                 type="button"
                 onClick={() =>
-                  setShowPassword((prev) => !prev)
+                  setShowPassword((previous) => !previous)
                 }
                 disabled={loading}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-white disabled:opacity-50"
@@ -253,7 +415,10 @@ function LoginForm() {
 
           {/* Error */}
           {errorMessage && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+            <div
+              role="alert"
+              className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400"
+            >
               {errorMessage}
             </div>
           )}

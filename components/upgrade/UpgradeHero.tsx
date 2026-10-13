@@ -9,18 +9,18 @@ import {
 
 interface UpgradeHeroProps {
   currentPlan?: string;
-  usedCredits?: number;
+  credits?: number;
   totalCredits?: number;
 }
 
 export default function UpgradeHero({
   currentPlan = "Free",
-  usedCredits = 80,
+  credits = 0,
   totalCredits = 100,
 }: UpgradeHeroProps) {
   const usagePercent =
     totalCredits > 0
-      ? Math.min((usedCredits / totalCredits) * 100, 100)
+      ? Math.min((credits / totalCredits) * 100, 100)
       : 0;
 
   return (
@@ -70,7 +70,7 @@ export default function UpgradeHero({
 
                   <div>
                     <h2 className="text-xl font-bold text-white">
-                      {currentPlan}
+                      {currentPlan.toUpperCase()}
                     </h2>
 
                     <p className="text-xs text-gray-500">
@@ -96,10 +96,10 @@ export default function UpgradeHero({
                 </p>
 
                 <p className="mt-2 text-xl font-bold text-white">
-                  {usedCredits.toLocaleString()}
+                  {credits.toLocaleString()}
                   <span className="text-sm font-medium text-gray-500">
                     {" "}
-                    / {totalCredits.toLocaleString()}
+                   / {totalCredits.toLocaleString()}
                   </span>
                 </p>
               </div>
@@ -120,7 +120,7 @@ export default function UpgradeHero({
             </div>
 
             <p className="mt-3 text-xs text-gray-500">
-              You have used {usedCredits.toLocaleString()} of{" "}
+              You have used {credits.toLocaleString()} of{" "}
               {totalCredits.toLocaleString()} available AI credits.
             </p>
           </div>

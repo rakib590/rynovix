@@ -1,6 +1,5 @@
 "use client";
 
-import DashboardLayout from "@/components/dashboard/DashboardLayout";
 
 import SettingsHeader from "@/components/settings/SettingsHeader";
 import ProfileSettings from "@/components/settings/ProfileSettings";
@@ -14,7 +13,6 @@ import DangerZone from "@/components/settings/DangerZone";
 
 export default function SettingsPage() {
   return (
-    <DashboardLayout>
       <div className="space-y-8">
 
         <SettingsHeader />
@@ -36,6 +34,5 @@ export default function SettingsPage() {
         <DangerZone />
 
       </div>
-    </DashboardLayout>
   );
 }

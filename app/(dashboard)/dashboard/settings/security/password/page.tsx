@@ -13,7 +13,6 @@ import {
   XCircle,
 } from "lucide-react";
 
-import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { createClient } from "@/lib/supabase/client";
 
 export default function ChangePasswordPage() {
@@ -152,7 +151,6 @@ export default function ChangePasswordPage() {
   };
 
   return (
-    <DashboardLayout>
       <div className="mx-auto w-full max-w-3xl space-y-6">
 
         {/* Back */}
@@ -448,7 +446,6 @@ export default function ChangePasswordPage() {
 
         </section>
       </div>
-    </DashboardLayout>
   );
 }
 

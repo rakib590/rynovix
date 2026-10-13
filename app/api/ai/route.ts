@@ -1057,20 +1057,43 @@ export async function POST(req: Request) {
           "Best Upload Time",
       };
 
-      await supabase
-        .from("ai_history")
-        .insert({
-          user_id: user.id,
-          tool_id: aiToolId,
-          tool_name:
-            toolNames[aiToolId],
-          title:
-            toolNames[aiToolId],
-          prompt,
-          result: parsedResult,
-          score,
-          credits_used: creditCost,
-        });
+      const { data: historyData, error: historyError } =
+  await supabase
+    .from("ai_history")
+    .insert({
+      user_id: user.id,
+      tool_id: aiToolId,
+      tool_name: toolNames[aiToolId],
+      title: toolNames[aiToolId],
+      prompt,
+      result: parsedResult,
+      score,
+      credits_used: creditCost,
+    })
+    .select()
+    .single();
+
+
+if (historyError) {
+
+  console.error(
+    "AI HISTORY INSERT ERROR:",
+    {
+      message: historyError.message,
+      details: historyError.details,
+      hint: historyError.hint,
+      code: historyError.code,
+    }
+  );
+
+} else {
+
+  console.log(
+    "AI HISTORY SAVED:",
+    historyData
+  );
+
+}
     } catch (historyError) {
       console.error(
         "History save failed:",

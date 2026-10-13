@@ -13,7 +13,6 @@ import {
   ExternalLink,
 } from "lucide-react";
 
-import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import HistoryResultRenderer from "@/components/history/HistoryResultRenderer";
 
 type HistoryItem = {
@@ -146,7 +145,6 @@ export default function HistoryDetailPage({
 
   if (loading) {
     return (
-      <DashboardLayout>
         <div className="space-y-8">
           <div className="h-8 w-48 animate-pulse rounded-lg bg-white/5" />
 
@@ -160,13 +158,11 @@ export default function HistoryDetailPage({
 
           <div className="h-96 animate-pulse rounded-3xl bg-[#0B1220]" />
         </div>
-      </DashboardLayout>
     );
   }
 
   if (error || !historyItem) {
     return (
-      <DashboardLayout>
         <div className="flex min-h-[60vh] items-center justify-center">
           <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#0B1220] p-8 text-center shadow-xl">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10 text-red-400">
@@ -191,7 +187,6 @@ export default function HistoryDetailPage({
             </Link>
           </div>
         </div>
-      </DashboardLayout>
     );
   }
 
@@ -200,7 +195,6 @@ export default function HistoryDetailPage({
   );
 
   return (
-    <DashboardLayout>
       <div className="mx-auto max-w-7xl space-y-8">
         {/* ==================================================
             HEADER
@@ -403,6 +397,5 @@ export default function HistoryDetailPage({
           </Link>
         </div>
       </div>
-    </DashboardLayout>
   );
 }

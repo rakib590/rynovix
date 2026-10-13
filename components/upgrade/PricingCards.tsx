@@ -89,7 +89,7 @@ export default function PricingCards({
 
     /* Current plan হলে checkout খুলবে না */
     if (
-      plan.name.toLowerCase() ===
+      plan.id.toLowerCase() ===
       currentPlan.toLowerCase()
     ) {
       return;
@@ -237,7 +237,7 @@ export default function PricingCards({
           );
 
           const isCurrent =
-            plan.name.toLowerCase() ===
+            plan.id.toLowerCase() ===
             currentPlan.toLowerCase();
 
           const isLoading =

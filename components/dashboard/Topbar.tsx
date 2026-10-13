@@ -450,11 +450,31 @@ export default function Topbar({
   }
 
   async function handleLogout() {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      await supabase
+        .from("profiles")
+        .update({
+          is_online: false,
+          last_activity: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+    }
+
     await supabase.auth.signOut();
+
+    setMenuOpen(false);
 
     router.replace("/login");
     router.refresh();
+  } catch (error) {
+    console.error("Logout Error:", error);
   }
+}
 
   function formatNotificationTime(
     dateString: string

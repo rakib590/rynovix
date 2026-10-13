@@ -13,7 +13,6 @@ import {
   XCircle,
 } from "lucide-react";
 
-import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { createClient } from "@/lib/supabase/client";
 
 type TotpFactor = {
@@ -323,16 +322,16 @@ export default function TwoFactorPage() {
 
   if (loading) {
     return (
-      <DashboardLayout>
+
         <div className="flex min-h-[60vh] items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
         </div>
-      </DashboardLayout>
+
     );
   }
 
   return (
-    <DashboardLayout>
+    <>
       <div className="mx-auto w-full max-w-4xl space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3">
@@ -791,6 +790,6 @@ export default function TwoFactorPage() {
           </div>
         </div>
       )}
-    </DashboardLayout>
+    </>
   );
 }

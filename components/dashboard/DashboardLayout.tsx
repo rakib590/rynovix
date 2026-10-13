@@ -11,26 +11,38 @@ import { ProfileProvider } from "@/components/providers/ProfileProvider";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 
+
 interface DashboardLayoutProps {
   children: ReactNode;
 }
 
+
 type Layout = "comfortable" | "compact";
 
+
 const LAYOUT_KEY = "rynovix-dashboard-layout";
+
 
 export default function DashboardLayout({
   children,
 }: DashboardLayoutProps) {
+
+
   const [mobileSidebarOpen, setMobileSidebarOpen] =
     useState(false);
+
 
   const [layout, setLayout] =
     useState<Layout>("comfortable");
 
+
+
   useEffect(() => {
+
+
     const savedLayout =
       localStorage.getItem(LAYOUT_KEY);
+
 
     if (
       savedLayout === "comfortable" ||
@@ -39,11 +51,16 @@ export default function DashboardLayout({
       setLayout(savedLayout);
     }
 
+
+
     const savedTheme =
       localStorage.getItem("rynovix-theme");
 
+
     const savedAccent =
       localStorage.getItem("rynovix-accent");
+
+
 
     const currentTheme =
       savedTheme === "dark" ||
@@ -51,6 +68,8 @@ export default function DashboardLayout({
       savedTheme === "system"
         ? savedTheme
         : "dark";
+
+
 
     const currentAccent =
       savedAccent === "blue" ||
@@ -63,118 +82,184 @@ export default function DashboardLayout({
         ? savedAccent
         : "blue";
 
+
+
     document.documentElement.dataset.theme =
       currentTheme;
+
 
     document.documentElement.dataset.accent =
       currentAccent;
 
-    if (currentTheme === "system") {
+
+
+    if(currentTheme === "system"){
+
       const prefersDark =
         window.matchMedia(
           "(prefers-color-scheme: dark)"
         ).matches;
 
+
       document.documentElement.dataset.resolvedTheme =
         prefersDark ? "dark" : "light";
 
+
       document.documentElement.style.colorScheme =
         prefersDark ? "dark" : "light";
+
+
     } else {
+
+
       document.documentElement.dataset.resolvedTheme =
         currentTheme;
 
+
       document.documentElement.style.colorScheme =
         currentTheme;
+
+
     }
 
-    const handleAppearanceChange = (
-      event: Event
-    ) => {
+
+
+
+    const handleAppearanceChange =
+      (event: Event)=>{
+
+
       const customEvent =
         event as CustomEvent<{
-          type: string;
-          value: string;
+          type:string;
+          value:string;
         }>;
 
-      if (!customEvent.detail) return;
 
-      if (
-        customEvent.detail.type === "layout"
-      ) {
+      if(!customEvent.detail) return;
+
+
+
+      if(customEvent.detail.type === "layout"){
+
+
         const newLayout =
           customEvent.detail.value;
 
-        if (
+
+        if(
           newLayout === "comfortable" ||
           newLayout === "compact"
-        ) {
+        ){
+
           setLayout(newLayout);
+
         }
+
       }
 
-      if (
-        customEvent.detail.type === "theme"
-      ) {
+
+
+
+      if(customEvent.detail.type === "theme"){
+
+
         const newTheme =
           customEvent.detail.value;
 
-        if (
+
+
+        if(
           newTheme === "dark" ||
           newTheme === "light" ||
           newTheme === "system"
-        ) {
-          if (newTheme === "system") {
+        ){
+
+
+          document.documentElement.dataset.theme =
+            newTheme;
+
+
+
+          if(newTheme === "system"){
+
+
             const prefersDark =
               window.matchMedia(
                 "(prefers-color-scheme: dark)"
               ).matches;
 
+
             document.documentElement.dataset.resolvedTheme =
-              prefersDark
-                ? "dark"
-                : "light";
+              prefersDark ? "dark" : "light";
+
 
             document.documentElement.style.colorScheme =
-              prefersDark
-                ? "dark"
-                : "light";
+              prefersDark ? "dark" : "light";
+
+
           } else {
+
+
             document.documentElement.dataset.resolvedTheme =
               newTheme;
 
+
             document.documentElement.style.colorScheme =
               newTheme;
+
+
           }
 
-          document.documentElement.dataset.theme =
-            newTheme;
         }
+
       }
 
-      if (
-        customEvent.detail.type === "accent"
-      ) {
+
+
+
+      if(customEvent.detail.type === "accent"){
+
+
         document.documentElement.dataset.accent =
           customEvent.detail.value;
+
+
       }
+
+
     };
+
+
+
 
     window.addEventListener(
       "rynovix-appearance-change",
       handleAppearanceChange
     );
 
-    return () => {
+
+
+    return()=>{
+
       window.removeEventListener(
         "rynovix-appearance-change",
         handleAppearanceChange
       );
+
     };
+
+
+
   }, []);
 
+
+
+
   return (
+
     <ProfileProvider>
+
       <div
         className={`dashboard-root flex h-screen overflow-hidden text-white ${
           layout === "compact"
@@ -182,6 +267,8 @@ export default function DashboardLayout({
             : "dashboard-comfortable"
         }`}
       >
+
+
         <Sidebar
           mobileOpen={mobileSidebarOpen}
           onClose={() =>
@@ -189,20 +276,38 @@ export default function DashboardLayout({
           }
         />
 
+
+
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+
+
           <Topbar
             onMenuClick={() =>
               setMobileSidebarOpen(true)
             }
           />
 
+
+
           <main className="min-w-0 flex-1 overflow-y-auto">
+
             <div className="dashboard-content p-4 sm:p-6 lg:p-8">
+
               {children}
+
             </div>
+
           </main>
+
+
         </div>
+
+
       </div>
+
+
     </ProfileProvider>
+
   );
+
 }

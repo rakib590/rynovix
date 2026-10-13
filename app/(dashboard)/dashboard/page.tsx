@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
+
 import { createClient } from "@/lib/supabase/server";
 
-import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import OnlineTracker from "@/components/dashboard/OnlineTracker";
+
 import StatsCards from "@/components/dashboard/StatsCards";
 import ToolGrid from "@/components/dashboard/ToolGrid";
 import RecentActivity from "@/components/dashboard/RecentActivity";
@@ -10,51 +12,104 @@ import UserProfileCard from "@/components/dashboard/right-sidebar/UserProfileCar
 import PlanCard from "@/components/dashboard/right-sidebar/PlanCard";
 import QuickActions from "@/components/dashboard/right-sidebar/QuickActions";
 
+
 export default async function DashboardPage() {
+
+
   const supabase = await createClient();
 
+
+
   const {
-    data: { user },
+    data: {
+      user,
+    },
   } = await supabase.auth.getUser();
 
+
+
   if (!user) {
+
     redirect("/login");
+
   }
 
+
+
   return (
-    <DashboardLayout>
-      <div>
 
-  {/* AI Toolbox */}
-  <ToolGrid />
+    <div>
 
-  {/* Stats */}
-  <div className="mt-8">
-    <StatsCards />
-  </div>
 
-  {/* Bottom Section */}
-<div className="mt-8 grid gap-6 xl:grid-cols-3">
+      {/* Online Status */}
 
-  {/* Left Side */}
-  <div className="flex flex-col gap-6">
-    <UserProfileCard />
-    <PlanCard />
-  </div>
+      <OnlineTracker />
 
-  {/* Center */}
-  <div>
-    <RecentActivity />
-  </div>
 
-  {/* Right Side */}
-  <div>
-    <QuickActions />
-  </div>
 
-</div>
+      {/* AI Toolbox */}
 
-</div>
-    </DashboardLayout>
+      <ToolGrid />
+
+
+
+      {/* Stats */}
+
+      <div className="mt-8">
+
+        <StatsCards />
+
+      </div>
+
+
+
+
+      {/* Bottom Section */}
+
+      <div className="mt-8 grid gap-6 xl:grid-cols-3">
+
+
+
+        {/* Left Side */}
+
+        <div className="flex flex-col gap-6">
+
+          <UserProfileCard />
+
+          <PlanCard />
+
+        </div>
+
+
+
+
+        {/* Center */}
+
+        <div>
+
+          <RecentActivity />
+
+        </div>
+
+
+
+
+        {/* Right Side */}
+
+        <div>
+
+          <QuickActions />
+
+        </div>
+
+
+
+      </div>
+
+
+
+    </div>
+
   );
+
 }

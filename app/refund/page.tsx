@@ -1,5 +1,5 @@
 export default function RefundPage() {
-const supportEmail = "[rynovix.support@gmail.com](mailto:rynovix.support@gmail.com)";
+const supportEmail = "rynovix.support@gmail.com";
 
 return ( <main className="min-h-screen bg-[#020617] px-6 py-16 text-slate-300"> <div className="mx-auto max-w-4xl">
 {/* Header */} <div className="mb-12"> <p className="mb-3 text-sm font-medium text-blue-400">

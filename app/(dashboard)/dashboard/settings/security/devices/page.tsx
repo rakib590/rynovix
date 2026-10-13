@@ -13,7 +13,6 @@ import {
   Tablet,
 } from "lucide-react";
 
-import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { createClient } from "@/lib/supabase/client";
 
 type LoginActivity = {
@@ -136,7 +135,6 @@ export default function ConnectedDevicesPage() {
   }
 
   return (
-    <DashboardLayout>
       <div className="mx-auto w-full max-w-5xl space-y-6">
         <div className="flex items-center gap-3">
           <Link
@@ -329,6 +327,5 @@ export default function ConnectedDevicesPage() {
           </p>
         </div>
       </div>
-    </DashboardLayout>
   );
 }
