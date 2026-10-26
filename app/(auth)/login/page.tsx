@@ -82,6 +82,74 @@ function LoginForm() {
       }
 
       // Step 3: Save detailed login history on the server
+
+      // Step 3.5: Save User Session
+
+try {
+
+  const {
+    data:{
+      session
+    },
+  } = await supabase.auth.getSession();
+
+
+  if(session?.access_token){
+
+    const sessionResponse =
+      await fetch(
+        "/api/user-session",
+        {
+          method:"POST",
+
+          headers:{
+            Authorization:
+            `Bearer ${session.access_token}`,
+
+            "Content-Type":
+            "application/json",
+          },
+
+          body:JSON.stringify({
+
+            device:
+            "Desktop",
+
+            browser:
+               navigator.userAgent.includes("Chrome")
+                ? "Google Chrome"
+                 : "Browser",
+
+            operating_system:
+            navigator.platform,
+
+          }),
+
+        }
+      );
+
+
+    if(!sessionResponse.ok){
+
+      console.error(
+        "SESSION SAVE FAILED"
+      );
+
+    }
+
+
+  }
+
+
+}catch(error){
+
+ console.error(
+  "SESSION ERROR:",
+  error
+ );
+
+}
+
       // The API verifies the authenticated user's access token.
       try {
         const {

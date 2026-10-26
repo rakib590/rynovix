@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 
 import UsersTable from "./UsersTable";
-
+import OnlineUsersCount from "./OnlineUsersCount";
 
 
 export default async function UsersPage() {
@@ -117,17 +117,21 @@ export default async function UsersPage() {
 
 
 
-  const onlineUsers =
-    userList.filter(
-      (user)=>
-        user.is_online === true
-    ).length;
+    const businessUsers =
+  userList.filter(
+    (user) =>
+      (
+        user.current_plan ||
+        user.plan ||
+        "free"
+      ).toLowerCase() === "business"
+  ).length;
 
 
 
 
 
-
+  
   return (
 
     <div
@@ -217,11 +221,13 @@ export default async function UsersPage() {
           value={proUsers}
         />
 
-
         <StatCard
-          title="Online"
-          value={onlineUsers}
+          title="Business Users"
+          value={businessUsers}
         />
+
+
+        <OnlineUsersCount />
 
 
       </div>

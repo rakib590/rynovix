@@ -61,7 +61,7 @@ export default function OnlineTracker() {
     const interval =
       setInterval(
         updateOnlineStatus,
-        60000
+        30000
       );
 
 

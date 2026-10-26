@@ -6,6 +6,8 @@ import DashboardGuard from "@/components/dashboard/DashboardGuard";
 
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 
+import OnlineTracker from "@/components/dashboard/OnlineTracker";
+
 
 export default async function DashboardGroupLayout({
   children,
@@ -36,6 +38,8 @@ export default async function DashboardGroupLayout({
   return (
 
     <DashboardGuard>
+
+      <OnlineTracker />
 
       <DashboardLayout>
 

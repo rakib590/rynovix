@@ -5,37 +5,109 @@ import { isIP } from "node:net";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+
+// -----------------------------
+// Device Type
+// -----------------------------
+
 function getDeviceType(ua: string) {
-  if (/ipad|tablet|kindle|playbook/i.test(ua)) return "Tablet";
-  if (/mobile|android|iphone|ipod/i.test(ua)) return "Mobile";
+  if (/ipad|tablet|kindle|playbook/i.test(ua)) {
+    return "Tablet";
+  }
+
+  if (/mobile|android|iphone|ipod/i.test(ua)) {
+    return "Mobile";
+  }
+
   return "Desktop";
 }
 
+
+// -----------------------------
+// Browser
+// -----------------------------
+
 function getBrowser(ua: string) {
-  if (/edg/i.test(ua)) return "Microsoft Edge";
-  if (/opr|opera/i.test(ua)) return "Opera";
-  if (/firefox/i.test(ua)) return "Mozilla Firefox";
-  if (/chrome|crios/i.test(ua)) return "Google Chrome";
-  if (/safari/i.test(ua)) return "Safari";
+
+  if (/edg/i.test(ua)) {
+    return "Microsoft Edge";
+  }
+
+  if (/opr|opera/i.test(ua)) {
+    return "Opera";
+  }
+
+  if (/firefox/i.test(ua)) {
+    return "Mozilla Firefox";
+  }
+
+  if (/chrome|crios/i.test(ua)) {
+    return "Google Chrome";
+  }
+
+  if (/safari/i.test(ua)) {
+    return "Safari";
+  }
+
   return "Unknown Browser";
 }
 
+
+// -----------------------------
+// Operating System
+// -----------------------------
+
 function getOperatingSystem(ua: string) {
-  if (/cros/i.test(ua)) return "ChromeOS";
-  if (/windows nt/i.test(ua)) return "Windows";
-  if (/android/i.test(ua)) return "Android";
-  if (/iphone|ipad|ipod/i.test(ua)) return "iOS";
-  if (/macintosh|mac os x/i.test(ua)) return "macOS";
-  if (/linux/i.test(ua)) return "Linux";
+
+  if (/cros/i.test(ua)) {
+    return "ChromeOS";
+  }
+
+  if (/windows nt/i.test(ua)) {
+    return "Windows";
+  }
+
+  if (/android/i.test(ua)) {
+    return "Android";
+  }
+
+  if (/iphone|ipad|ipod/i.test(ua)) {
+    return "iOS";
+  }
+
+  if (/macintosh|mac os x/i.test(ua)) {
+    return "macOS";
+  }
+
+  if (/linux/i.test(ua)) {
+    return "Linux";
+  }
+
   return "Unknown OS";
 }
 
-function isPublicIp(value: string): boolean {
+
+// -----------------------------
+// Public IP Check
+// -----------------------------
+
+function isPublicIp(value: string) {
+
   const version = isIP(value);
+
   if (!version) return false;
 
+
   if (version === 4) {
-    const [a, b, c] = value.split(".").map(Number);
+
+    const [
+      a,
+      b,
+      c
+    ] = value
+      .split(".")
+      .map(Number);
+
 
     if (
       a === 0 ||
@@ -45,42 +117,50 @@ function isPublicIp(value: string): boolean {
       (a === 100 && b >= 64 && b <= 127) ||
       (a === 169 && b === 254) ||
       (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 192 && b === 0 && c === 0) ||
-      (a === 198 && (b === 18 || b === 19)) ||
-      (a === 198 && b === 51 && c === 100) ||
-      (a === 203 && b === 0 && c === 113)
+      (a === 192 && b === 168)
     ) {
       return false;
     }
 
+
     return true;
   }
 
+
   const ip = value.toLowerCase();
+
 
   if (
     ip === "::" ||
     ip === "::1" ||
     ip.startsWith("fc") ||
-    ip.startsWith("fd") ||
-    ip.startsWith("fe8") ||
-    ip.startsWith("fe9") ||
-    ip.startsWith("fea") ||
-    ip.startsWith("feb")
+    ip.startsWith("fd")
   ) {
     return false;
   }
 
-  // Convert IPv4-mapped IPv6 addresses to IPv4.
-  const mapped = ip.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
 
-  if (mapped) return isPublicIp(mapped[1]);
+  const mapped =
+    ip.match(
+      /::ffff:(\d+\.\d+\.\d+\.\d+)$/i
+    );
+
+
+  if(mapped){
+    return isPublicIp(mapped[1]);
+  }
+
 
   return true;
 }
 
-function getClientIp(request: Request): string | null {
+
+// -----------------------------
+// Get Client IP
+// -----------------------------
+
+function getClientIp(request: Request) {
+
   const headers = [
     "x-vercel-forwarded-for",
     "x-forwarded-for",
@@ -88,210 +168,555 @@ function getClientIp(request: Request): string | null {
     "cf-connecting-ip",
   ];
 
-  for (const header of headers) {
-    const value = request.headers.get(header);
-    if (!value) continue;
 
-    for (const candidate of value.split(",")) {
-      const ip = candidate.trim();
+  for(const header of headers){
 
-      if (isPublicIp(ip)) return ip;
+    const value =
+      request.headers.get(header);
+
+
+    if(!value) continue;
+
+
+    for(
+      const item of value.split(",")
+    ){
+
+      const ip =
+        item.trim();
+
+
+      if(isPublicIp(ip)){
+        return ip;
+      }
+
     }
+
   }
+
 
   return null;
 }
 
-function cleanHeader(value: string | null): string | null {
-  if (!value) return null;
 
-  try {
-    const decoded = decodeURIComponent(value).trim();
-    return decoded && decoded.length <= 200 ? decoded : null;
-  } catch {
-    const trimmed = value.trim();
-    return trimmed && trimmed.length <= 200 ? trimmed : null;
-  }
+// -----------------------------
+// Header Cleaner
+// -----------------------------
+
+function cleanHeader(
+  value:string | null
+){
+
+  if(!value) return null;
+
+
+  const clean =
+    value.trim();
+
+
+  return clean.length <= 200
+    ? clean
+    : null;
+
 }
+
+
+
+// -----------------------------
+// IP Details
+// -----------------------------
 
 type IpDetails = {
-  country: string | null;
-  city: string | null;
-  isp: string | null;
+
+  country:string | null;
+
+  city:string | null;
+
+  isp:string | null;
+
 };
 
-async function getIpDetails(ip: string | null): Promise<IpDetails> {
-  const details: IpDetails = {
-    country: null,
-    city: null,
-    isp: null,
+
+
+async function getIpDetails(
+  ip:string | null
+):Promise<IpDetails>{
+
+
+  const result:IpDetails = {
+
+    country:null,
+
+    city:null,
+
+    isp:null,
+
   };
 
-  if (!ip) return details;
 
-  try {
-    const response = await fetch(
-      `https://ipwho.is/${encodeURIComponent(ip)}`,
-      {
-        cache: "no-store",
-        signal: AbortSignal.timeout(4000),
-      }
-    );
+  if(!ip){
+    return result;
+  }
 
-    if (!response.ok) return details;
 
-    const data = await response.json();
 
-    if (data.success === false) {
-      console.error("IP LOOKUP FAILED:", data.message ?? "Unknown error");
-      return details;
+  try{
+
+
+    const response =
+      await fetch(
+        `https://ipwho.is/${encodeURIComponent(ip)}`,
+        {
+          cache:"no-store",
+
+          signal:
+            AbortSignal.timeout(4000),
+        }
+      );
+
+
+
+    if(!response.ok){
+      return result;
     }
 
-    details.country =
-      typeof data.country === "string" ? data.country : null;
 
-    details.city =
-      typeof data.city === "string" ? data.city : null;
 
-    details.isp =
+    const data =
+      await response.json();
+
+
+
+    if(data.success === false){
+      return result;
+    }
+
+
+
+    result.country =
+      typeof data.country === "string"
+      ? data.country
+      : null;
+
+
+
+    result.city =
+      typeof data.city === "string"
+      ? data.city
+      : null;
+
+
+
+    result.isp =
       typeof data.connection?.isp === "string"
-        ? data.connection.isp
-        : typeof data.connection?.org === "string"
-          ? data.connection.org
-          : null;
-  } catch (error) {
-    console.error("IP LOOKUP ERROR:", error);
+      ? data.connection.isp
+      : null;
+
+
+
+  }catch(error){
+
+    console.error(
+      "IP LOOKUP ERROR:",
+      error
+    );
+
   }
 
-  return details;
+
+  return result;
+
 }
 
-export async function GET(request: Request) {
-  const requestUrl = new URL(request.url);
-  const code = requestUrl.searchParams.get("code");
-  const rawNext = requestUrl.searchParams.get("next");
+
+
+
+// =============================
+// Google Callback
+// =============================
+
+export async function GET(
+  request:Request
+){
+
+
+  const requestUrl =
+    new URL(request.url);
+
+
+
+  const code =
+    requestUrl.searchParams.get("code");
+
+
+
+  const rawNext =
+    requestUrl.searchParams.get("next");
+
+
 
   const next =
-    rawNext?.startsWith("/") && !rawNext.startsWith("//")
-      ? rawNext
-      : "/dashboard";
+    rawNext &&
+    rawNext.startsWith("/") &&
+    !rawNext.startsWith("//")
 
-  const loginUrl = (message: string) =>
-    NextResponse.redirect(
-      new URL(`/login?error=${encodeURIComponent(message)}`, requestUrl.origin)
+    ? rawNext
+
+    : "/dashboard";
+
+
+
+
+  const loginError =
+    (message:string)=>
+
+      NextResponse.redirect(
+
+        new URL(
+          `/login?error=${encodeURIComponent(message)}`,
+          requestUrl.origin
+        )
+
+      );
+
+
+
+
+  if(!code){
+
+    return loginError(
+      "Google authentication failed."
     );
 
-  if (!code) {
-    return loginUrl("Google authentication failed.");
   }
 
-  const supabase = await createClient();
 
-  const { error: exchangeError } =
-    await supabase.auth.exchangeCodeForSession(code);
 
-  if (exchangeError) {
-    console.error("AUTH CALLBACK ERROR:", exchangeError.message);
-    return loginUrl(exchangeError.message);
-  }
+  const supabase =
+    await createClient();
+
+
+
 
   const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return loginUrl("User session failed");
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role,status")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profileError || !profile) {
-    console.error(
-      "PROFILE LOOKUP ERROR:",
-      profileError?.message ?? "Profile not found"
+    error:exchangeError
+  } =
+    await supabase.auth.exchangeCodeForSession(
+      code
     );
 
-    await supabase.auth.signOut();
-    return loginUrl("Unable to verify account");
+
+
+  if(exchangeError){
+
+    console.error(
+      exchangeError
+    );
+
+
+    return loginError(
+      exchangeError.message
+    );
+
   }
 
-  if (profile.status === "suspended") {
-    await supabase.auth.signOut();
-    return loginUrl("Account suspended");
+
+
+
+  const {
+    data:{
+      user
+    },
+
+    error:userError
+
+  } =
+    await supabase.auth.getUser();
+
+
+
+
+  if(
+    userError ||
+    !user
+  ){
+
+    return loginError(
+      "User session failed."
+    );
+
   }
 
-  const userAgent = request.headers.get("user-agent") ?? "";
-  const deviceType = getDeviceType(userAgent);
-  const browser = getBrowser(userAgent);
-  const os = getOperatingSystem(userAgent);
-  const ipAddress = getClientIp(request);
 
-  console.info("LOGIN HISTORY DIAGNOSTICS:", {
-    ipFound: Boolean(ipAddress),
-    ipVersion: ipAddress ? isIP(ipAddress) : 0,
-    vercelCountryPresent: Boolean(
-      request.headers.get("x-vercel-ip-country")
-    ),
-    vercelCityPresent: Boolean(request.headers.get("x-vercel-ip-city")),
-  });
 
-  const ipDetails = await getIpDetails(ipAddress);
+
+
+  const {
+    data:profile
+  } =
+    await supabase
+      .from("profiles")
+      .select(
+        "role,status"
+      )
+      .eq(
+        "id",
+        user.id
+      )
+      .maybeSingle();
+
+
+
+
+
+  if(
+    !profile
+  ){
+
+    await supabase.auth.signOut();
+
+    return loginError(
+      "Profile not found."
+    );
+
+  }
+
+
+
+
+  if(
+    profile.status === "suspended"
+  ){
+
+    await supabase.auth.signOut();
+
+
+    return loginError(
+      "Account suspended."
+    );
+
+  }
+
+
+
+
+  const userAgent =
+    request.headers.get(
+      "user-agent"
+    ) || "";
+
+
+
+  const ip =
+    getClientIp(request);
+
+
+
+  const ipDetails =
+    await getIpDetails(ip);
+
+
+
 
   const country =
-    cleanHeader(request.headers.get("x-vercel-ip-country")) ??
+    cleanHeader(
+      request.headers.get(
+        "x-vercel-ip-country"
+      )
+    )
+    ??
     ipDetails.country;
 
+
+
+
   const city =
-    cleanHeader(request.headers.get("x-vercel-ip-city")) ??
+    cleanHeader(
+      request.headers.get(
+        "x-vercel-ip-city"
+      )
+    )
+    ??
     ipDetails.city;
 
-  const { error: historyError } = await supabase
-    .from("login_history")
-    .insert({
-      user_id: user.id,
-      ip_address: ipAddress,
-      country,
-      city,
-      isp: ipDetails.isp,
-      device_type: deviceType,
-      os,
-      device: deviceType,
-      browser,
-      status: "success",
-    });
 
-  if (historyError) {
-    console.error("GOOGLE LOGIN HISTORY ERROR:", historyError.message);
+
+
+  // Login History
+
+  const {
+    error:historyError
+  } =
+    await supabase
+      .from("login_history")
+      .insert({
+
+        user_id:user.id,
+
+        ip_address:ip,
+
+        country,
+
+        city,
+
+        isp:
+          ipDetails.isp,
+
+        device_type:
+          getDeviceType(userAgent),
+
+        os:
+          getOperatingSystem(userAgent),
+
+        device:
+          getDeviceType(userAgent),
+
+        browser:
+          getBrowser(userAgent),
+
+        status:"success",
+
+      });
+
+
+
+  if(historyError){
+
+    console.error(
+      "LOGIN HISTORY ERROR:",
+      historyError.message
+    );
+
   }
 
-  const { error: activityError } = await supabase
-    .from("login_activity")
-    .insert({
-      user_id: user.id,
-      login_method: "google",
-      device_type: deviceType,
-      browser,
-      operating_system: os,
-      user_agent: userAgent || null,
-      ip_address: ipAddress,
-      last_active_at: new Date().toISOString(),
-    });
 
-  if (activityError) {
-    console.error("GOOGLE LOGIN ACTIVITY ERROR:", activityError.message);
+
+
+  // Login Activity
+
+  const {
+    error:activityError
+  } =
+    await supabase
+      .from("login_activity")
+      .insert({
+
+        user_id:user.id,
+
+        login_method:"google",
+
+        device_type:
+          getDeviceType(userAgent),
+
+        browser:
+          getBrowser(userAgent),
+
+        operating_system:
+          getOperatingSystem(userAgent),
+
+        user_agent:
+          userAgent,
+
+        ip_address:
+          ip,
+
+        last_active_at:
+          new Date().toISOString(),
+
+      });
+
+
+
+  if(activityError){
+
+    console.error(
+      "LOGIN ACTIVITY ERROR:",
+      activityError.message
+    );
+
   }
 
-  if (
+
+
+
+  // -----------------------------
+// Google User Session
+// -----------------------------
+
+const {
+  error:sessionError
+} =
+await supabase
+  .from("user_sessions")
+  .insert({
+
+    user_id:user.id,
+
+    device:
+      getDeviceType(userAgent),
+
+    browser:
+      getBrowser(userAgent),
+
+    operating_system:
+      getOperatingSystem(userAgent),
+
+    ip_address:
+      ip,
+
+    user_agent:
+      userAgent,
+
+    status:
+      "active",
+
+    last_active_at:
+      new Date().toISOString(),
+
+  });
+
+
+
+if(sessionError){
+
+  console.error(
+    "GOOGLE USER SESSION ERROR:",
+    sessionError.message
+  );
+
+}
+
+
+
+
+  // Admin Redirect
+
+  if(
     profile.status === "active" &&
-    (profile.role === "admin" || profile.role === "super_admin")
-  ) {
-    return NextResponse.redirect(new URL("/admin", requestUrl.origin));
+    (
+      profile.role === "admin" ||
+      profile.role === "super_admin"
+    )
+  ){
+
+    return NextResponse.redirect(
+      new URL(
+        "/admin",
+        requestUrl.origin
+      )
+    );
+
   }
 
-  return NextResponse.redirect(new URL(next, requestUrl.origin));
+
+
+
+  return NextResponse.redirect(
+    new URL(
+      next,
+      requestUrl.origin
+    )
+  );
+
+
 }
