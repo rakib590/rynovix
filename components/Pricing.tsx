@@ -1,8 +1,9 @@
+
 "use client";
 
-import { Check, Sparkles, Zap } from "lucide-react";
 import { useState } from "react";
 import Link from "next/link";
+import { Check, Sparkles, Zap, Loader2 } from "lucide-react";
 
 import {
   plans,
@@ -10,9 +11,46 @@ import {
   type BillingCycle,
 } from "@/lib/billing/plans";
 
+const CHECKOUT_LINKS = {
+  pro: {
+    monthly:
+      "https://rynovix-ai.lemonsqueezy.com/checkout/buy/1f9dfd35-3672-4b4b-b507-954059a00cb9",
+    yearly:
+      "https://rynovix-ai.lemonsqueezy.com/checkout/buy/dbd06ea6-7bdf-49af-9d98-2ef18a2764fd",
+  },
+  business: {
+    monthly:
+      "https://rynovix-ai.lemonsqueezy.com/checkout/buy/b2dbb4ee-b86f-4bec-b01e-c9e7c6f63d44",
+    yearly:
+      "https://rynovix-ai.lemonsqueezy.com/checkout/buy/80f2c0b9-8a78-4418-b2ff-7a1b6256cb37",
+  },
+};
+
 export default function Pricing() {
   const [billingCycle, setBillingCycle] =
     useState<BillingCycle>("monthly");
+
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(
+    null
+  );
+
+  function handleCheckout(planId: string) {
+    const checkoutLinks =
+      CHECKOUT_LINKS[
+        planId as keyof typeof CHECKOUT_LINKS
+      ];
+
+    if (!checkoutLinks) return;
+
+    const checkoutUrl = checkoutLinks[billingCycle];
+
+    if (!checkoutUrl) return;
+
+    setLoadingPlan(planId);
+
+    // Public pricing: checkout can open without logging in.
+    window.location.assign(checkoutUrl);
+  }
 
   return (
     <section
@@ -20,7 +58,6 @@ export default function Pricing() {
       className="w-full bg-[#060B1A] px-4 py-16 sm:px-6 lg:px-8"
     >
       <div className="mx-auto max-w-7xl">
-
         {/* Header */}
         <div className="mb-3 flex justify-center">
           <span className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-400 to-fuchsia-500 bg-clip-text text-lg font-bold uppercase tracking-[0.2em] text-transparent">
@@ -29,17 +66,21 @@ export default function Pricing() {
           </span>
         </div>
 
-        <p className="text-center text-lg text-slate-400">
+        <h2 className="text-center text-3xl font-bold text-white sm:text-4xl">
+          Choose Your Plan
+        </h2>
+
+        <p className="mt-3 text-center text-base text-slate-400 sm:text-lg">
           Start free. Upgrade anytime.
         </p>
 
         {/* Billing Toggle */}
         <div className="mt-8 flex justify-center">
           <div className="inline-flex items-center rounded-xl border border-white/10 bg-white/[0.03] p-1.5 backdrop-blur-sm">
-
             <button
               type="button"
               onClick={() => setBillingCycle("monthly")}
+              aria-pressed={billingCycle === "monthly"}
               className={`rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-300 ${
                 billingCycle === "monthly"
                   ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
@@ -52,6 +93,7 @@ export default function Pricing() {
             <button
               type="button"
               onClick={() => setBillingCycle("yearly")}
+              aria-pressed={billingCycle === "yearly"}
               className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-300 ${
                 billingCycle === "yearly"
                   ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
@@ -59,35 +101,33 @@ export default function Pricing() {
               }`}
             >
               Yearly
-
               <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-bold text-green-400">
                 SAVE 20%
               </span>
             </button>
-
           </div>
         </div>
 
-        {/* Cards */}
-        <div className="mt-12 grid grid-cols-1 items-center gap-6 lg:grid-cols-3">
-
+        {/* Pricing Cards */}
+        <div className="mt-12 grid grid-cols-1 items-stretch gap-6 lg:grid-cols-3">
           {plans.map((plan) => {
             const price = getPlanPrice(plan, billingCycle);
+            const isFree = plan.id === "free";
+            const isLoading = loadingPlan === plan.id;
 
             return (
               <div
                 key={plan.id}
-                className={`group relative flex flex-col rounded-3xl border p-8 transition-all duration-300 ${
+                className={`group relative flex flex-col rounded-3xl border p-6 transition-all duration-300 sm:p-8 ${
                   plan.popular
-                    ? "border-blue-500/60 bg-[#0B1024]/80 shadow-[0_0_80px_-15px_rgba(79,70,229,0.6)] lg:scale-105"
-                    : "border-[#252B45] bg-[#0A1024]/50 hover:border-blue-500/40 hover:shadow-[0_0_50px_-15px_rgba(99,102,241,0.4)]"
+                    ? "border-blue-500/60 bg-[#0B1024]/80 shadow-[0_0_60px_-20px_rgba(79,70,229,0.6)] lg:scale-[1.03]"
+                    : "border-[#252B45] bg-[#0A1024]/50 hover:border-blue-500/40 hover:shadow-[0_0_40px_-15px_rgba(99,102,241,0.35)]"
                 }`}
               >
-
                 {/* Popular Badge */}
                 {plan.popular && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-4 py-1.5 text-xs font-bold text-white">
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-blue-600 px-4 py-1.5 text-xs font-bold text-white">
                       <Zap size={13} />
                       MOST POPULAR
                     </span>
@@ -95,11 +135,9 @@ export default function Pricing() {
                 )}
 
                 {/* Plan Name */}
-                <div className="flex items-center justify-between">
-                  <h3 className="text-2xl font-bold text-slate-100">
-                    {plan.name}
-                  </h3>
-                </div>
+                <h3 className="text-2xl font-bold text-slate-100">
+                  {plan.name}
+                </h3>
 
                 {/* Description */}
                 <p className="mt-3 min-h-[48px] text-sm leading-6 text-slate-400">
@@ -112,27 +150,27 @@ export default function Pricing() {
                     ${price}
                   </span>
 
-                  {plan.id !== "free" && (
-                    <span className="text-base text-slate-400">
+                  {!isFree && (
+                    <span className="text-sm text-slate-400">
                       /month
                     </span>
                   )}
                 </div>
 
-                {/* Yearly Billing Note */}
-                {plan.id !== "free" && billingCycle === "yearly" && (
+                {isFree ? (
+                  <p className="mt-2 text-xs text-slate-500">
+                    No credit card required
+                  </p>
+                ) : billingCycle === "yearly" ? (
                   <p className="mt-2 text-xs text-green-400">
                     Billed annually • Save 20%
                   </p>
-                )}
-
-                {plan.id !== "free" && billingCycle === "monthly" && (
+                ) : (
                   <p className="mt-2 text-xs text-green-400">
-                    Cancel anytime • Secure payment
+                    Secure checkout
                   </p>
                 )}
 
-                {/* Divider */}
                 <div className="my-7 h-px bg-white/10" />
 
                 {/* Features */}
@@ -156,30 +194,51 @@ export default function Pricing() {
                   ))}
                 </ul>
 
-                {/* Button */}
-                <Link
-                  href={
-                    plan.id === "free"
-                      ? "/signup"
-                      : "/pricing"
-                  }
-                  className={`mt-10 flex w-full items-center justify-center rounded-xl px-6 py-3.5 text-sm font-semibold transition-all duration-300 ${
-                    plan.popular
-                      ? "bg-blue-600 text-white hover:bg-blue-700"
-                      : "border border-[#252B45] bg-transparent text-slate-200 hover:border-blue-500/50 hover:bg-[#0E1730]/60"
-                  }`}
-                >
-                  {plan.id === "free"
-                    ? "Get Started Free"
-                    : `Upgrade to ${plan.name}`}
-                </Link>
-
+                {/* CTA */}
+                {isFree ? (
+                  <Link
+                    href="/signup"
+                    className="mt-10 flex w-full items-center justify-center rounded-xl border border-[#252B45] bg-transparent px-6 py-3.5 text-sm font-semibold text-slate-200 transition-all duration-300 hover:border-blue-500/50 hover:bg-[#0E1730]/60"
+                  >
+                    Get Started Free
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleCheckout(plan.id)}
+                    disabled={isLoading}
+                    className={`mt-10 flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-semibold transition-all duration-300 disabled:cursor-wait disabled:opacity-70 ${
+                      plan.popular
+                        ? "bg-blue-600 text-white hover:bg-blue-700"
+                        : "border border-[#252B45] bg-transparent text-slate-200 hover:border-blue-500/50 hover:bg-[#0E1730]/60"
+                    }`}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2
+                          size={16}
+                          className="animate-spin"
+                        />
+                        Opening Checkout...
+                      </>
+                    ) : (
+                      <>
+                        Upgrade to {plan.name}
+                        <Zap size={16} />
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             );
           })}
-
         </div>
 
+        {/* Payment Note */}
+        <p className="mt-8 text-center text-xs leading-5 text-slate-500">
+          Secure checkout powered by Lemon Squeezy.
+          Payment methods depend on checkout availability.
+        </p>
       </div>
     </section>
   );

@@ -9,26 +9,42 @@ type FaqItem = {
   answer: string;
 };
 
+
 const FAQ_ITEMS: FaqItem[] = [
   {
     question: "What is RYNOVIX?",
     answer:
-      "RYNOVIX is an AI platform designed to help creators generate and optimize content with easy-to-use tools for titles, descriptions, hashtags, scripts, SEO, and more.",
+      "RYNOVIX is an AI-powered creator platform featuring 32 AI tools designed to help creators generate content, improve SEO, discover ideas, and streamline their creative workflow.",
   },
   {
     question: "Is there a free plan?",
     answer:
-      "Yes. Our Free plan includes 100 AI Credits per month and access to 10 AI creator tools at no cost. No credit card is required to get started.",
+      "Yes. RYNOVIX offers a Free plan with 100 AI Credits per month, giving creators an easy way to get started with AI-powered content creation.",
+  },
+  {
+    question: "How many AI tools does RYNOVIX offer?",
+    answer:
+      "RYNOVIX provides 32 AI creator tools. All 32 tools are available to help you create content, generate ideas, improve SEO, and work more efficiently.",
   },
   {
     question: "Which AI tools are included?",
     answer:
-      "RYNOVIX includes 10 AI creator tools covering title generation, descriptions, hashtags, tags, script writing, Shorts ideas, thumbnail titles, SEO checks, keyword generation, and upload-time suggestions. Tool usage consumes credits according to each tool's credit cost.",
+      "RYNOVIX offers 32 AI tools covering content writing, title and description generation, hashtags, tags, script writing, Shorts ideas, thumbnail titles, SEO optimization, keyword research, creative generation, and other creator workflows.",
   },
   {
-    question: "Can I use it for YouTube?",
+    question: "Can I use RYNOVIX for YouTube?",
     answer:
-      "Absolutely. RYNOVIX is designed with YouTube creators in mind, helping with content ideas, titles, descriptions, tags, hashtags, thumbnails, and SEO.",
+      "Absolutely! RYNOVIX is designed to support YouTube creators with video ideas, titles, descriptions, scripts, tags, hashtags, thumbnails, keywords, SEO optimization, and content planning.",
+  },
+  {
+    question: "Are all 32 AI tools available?",
+    answer:
+      "Yes. All 32 AI tools are available on RYNOVIX. You can explore the available tools and choose the ones that best fit your content creation workflow.",
+  },
+  {
+    question: "Do AI tools use credits?",
+    answer:
+      "AI generation uses credits according to the selected tool and action. Your available credit balance and the applicable usage costs determine how much you can generate.",
   },
   {
     question: "Is my data secure?",
@@ -36,21 +52,22 @@ const FAQ_ITEMS: FaqItem[] = [
       "We take data privacy and security seriously. Please review our Privacy Policy for details about how RYNOVIX handles and protects your information.",
   },
   {
-    question: "When are new AI tools coming?",
+    question: "Can RYNOVIX help improve my content?",
     answer:
-      "We plan to improve RYNOVIX and introduce additional tools over time. New tools and features will be announced through our Updates page when they become available.",
+      "Yes. RYNOVIX helps you brainstorm ideas, create engaging content, optimize titles and descriptions, discover relevant keywords, and improve your content workflow using AI-powered tools.",
   },
   {
-    question: "How do I upgrade?",
+    question: "How do I upgrade my plan?",
     answer:
-      "You can choose a Pro or Business plan from the Pricing page. Sign in when prompted and follow the checkout instructions to complete your upgrade. Subscription terms are presented during checkout.",
+      "Visit the Pricing section to compare the Free, Pro, and Business plans. Choose the plan that fits your needs and follow the checkout instructions to complete your subscription.",
   },
   {
-    question: "Do you offer support?",
+    question: "Do you offer customer support?",
     answer:
-      "Free users can access community support. Pro and Business users may receive priority support according to the features included in their selected plan. Visit our Help Center or Contact page for assistance.",
+      "If you need help using RYNOVIX, visit the available Help Center or Contact page for assistance. Support options may vary depending on your selected plan.",
   },
 ];
+
 
 function FaqCard({ item }: { item: FaqItem }) {
   const [open, setOpen] = useState(false);

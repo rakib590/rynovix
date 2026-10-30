@@ -41,6 +41,7 @@ type Tool = {
   description: string;
   icon: LucideIcon;
   image: string;
+  secondaryImage?: string;
   href: string;
   beforeImage?: string;
   afterImage?: string;
@@ -67,6 +68,7 @@ const sections: ToolSection[] = [
         description: "Brainstorm ideas, get answers, and plan creative projects with AI.",
         icon: MessageCircle,
         image: "/images/tools/ai-chat-assistant.png",
+         secondaryImage: "/images/tools/ai-chat-assistant-2.png",
         href: "/dashboard/tools/ai-chat-assistant",
       },
       {
@@ -74,6 +76,7 @@ const sections: ToolSection[] = [
         description: "Turn your imagination into stunning visual concepts.",
         icon: ImageIcon,
         image: "/images/tools/ai-image-generator.png",
+        secondaryImage: "/images/tools/ai-image-generator-2.png",
         href: "/dashboard/tools/ai-image-generator",
       },
       {
@@ -81,6 +84,7 @@ const sections: ToolSection[] = [
         description: "Explore cinematic video ideas from text or image prompts.",
         icon: Video,
         image: "/images/tools/ai-video-generator.png",
+        secondaryImage: "/images/tools/ai-video-generator-2.png",
         href: "/dashboard/tools/ai-video-generator",
       },
       {
@@ -88,6 +92,7 @@ const sections: ToolSection[] = [
         description: "Create natural-sounding voiceovers for your content.",
         icon: Mic,
         image: "/images/tools/ai-voice-generator.png",
+        secondaryImage: "/images/tools/ai-voice-generator-2.png",
         href: "/dashboard/tools/ai-voice-generator",
       },
     ],
@@ -494,6 +499,54 @@ function BeforeAfter({
 
 
 
+function RotatingToolImage({
+  image,
+  secondaryImage,
+  title,
+}: {
+  image: string;
+  secondaryImage: string;
+  title: string;
+}) {
+  const [showSecond, setShowSecond] = useState(false);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setShowSecond((current) => !current);
+    }, 4000);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="relative aspect-[4/3] overflow-hidden bg-[#0b1225]">
+      <img
+        src={image}
+        alt={`${title} preview`}
+        loading="lazy"
+        draggable={false}
+        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-in-out group-hover:scale-105 ${
+          showSecond ? "opacity-0" : "opacity-100"
+        }`}
+      />
+
+      <img
+        src={secondaryImage}
+        alt={`${title} alternate preview`}
+        loading="lazy"
+        draggable={false}
+        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-in-out group-hover:scale-105 ${
+          showSecond ? "opacity-100" : "opacity-0"
+        }`}
+      />
+
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#070b18]/90 via-transparent to-transparent" />
+    </div>
+  );
+}
+
+
+
 function ToolCard({
   tool,
   number,
@@ -533,6 +586,12 @@ function ToolCard({
     after={tool.afterImage}
     beforeVideo={tool.beforeVideo}
     afterVideo={tool.afterVideo}
+    title={tool.title}
+  />
+) : tool.secondaryImage ? (
+  <RotatingToolImage
+    image={tool.image}
+    secondaryImage={tool.secondaryImage}
     title={tool.title}
   />
 ) : (

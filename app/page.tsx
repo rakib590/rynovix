@@ -1,3 +1,4 @@
+
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import ToolGrid from "@/components/ToolGrid";
@@ -11,26 +12,54 @@ import Footer from "@/components/Footer";
 
 export default function Home() {
   return (
-    <main className="bg-[#050814] min-h-screen">
-  <Navbar />
-  <Hero />
-  <div className="-mt-30">
-    <ToolGrid />
-    <div className="-mt-30"></div>
-    <Features />
-    <div className="-mt-30"></div>
-    <WhyChoose />
-    <div className="-mt-30"></div>
-    <Pricing />
-    <div className="-mt-10"></div>
-    <Stats />
-    <div className="-mt-20"></div>
-    <Testimonials />
-    <div className="-mt-20"></div>
-    <FAQ />
-    <div className="-mt-10"></div>
-    <Footer />
-  </div>
-</main>
+    <main className="min-h-screen overflow-x-clip bg-[#050814]">
+      <Navbar />
+
+      <Hero />
+
+      <section className="relative z-10">
+        <ToolGrid />
+      </section>
+
+      <section
+        id="features"
+        className="relative z-10 mt-16 scroll-mt-24 sm:mt-20"
+      >
+        <Features />
+      </section>
+
+      <section
+        id="why-choose"
+        className="relative z-10 mt-16 scroll-mt-24 sm:mt-20"
+      >
+        <WhyChoose />
+      </section>
+
+      <section
+        id="pricing"
+        className="relative z-10 mt-16 scroll-mt-24 sm:mt-24"
+      >
+        <Pricing />
+      </section>
+
+      <section className="relative z-10 mt-12 sm:mt-16">
+        <Stats />
+      </section>
+
+      <section className="relative z-10 mt-12 sm:mt-16">
+        <Testimonials />
+      </section>
+
+      <section
+        id="faq"
+        className="relative z-10 mt-12 scroll-mt-24 sm:mt-16"
+      >
+        <FAQ />
+      </section>
+
+      <section className="relative z-10 mt-10">
+        <Footer />
+      </section>
+    </main>
   );
 }

@@ -1,26 +1,29 @@
+
 export default function HeroLeft() {
   return (
-    <div className="w-full max-w-[720px]">
+    <div className="mx-auto w-full max-w-[720px] min-w-0">
       {/* Heading */}
-      <h1 className="text-center lg:text-left text-[56px] leading-[1.05] font-extrabold tracking-tight sm:text-[64px] lg:text-[78px]">
+      <h1 className="text-balance text-center text-[clamp(2.5rem,6vw,4.875rem)] font-extrabold leading-[1.08] tracking-tight lg:text-left">
         <span className="block text-white">
           One Platform.
         </span>
 
-        <span className="block bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 bg-clip-text text-transparent">
-          Unlimited AI Possibilities.
+        <span className="mt-2 block bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500 bg-clip-text text-transparent">
+          32 AI Tools.
+        </span>
+
+        <span className="mt-2 block text-white">
+          Unlimited Possibilities.
         </span>
       </h1>
 
       {/* Description */}
-      <p className="mt-10 max-w-[680px] text-center lg:text-left text-[20px] leading-[1.9] text-slate-300">
-        All-in-one AI platform for creators. Start with powerful YouTube AI
-        tools today, and unlock Image, Video, Voice, Website, and many more AI
-        tools as{" "}
-        <span className="font-semibold text-white">
-          RYNOVIX
-        </span>{" "}
-        continues to grow.
+      <p className="mx-auto mt-6 max-w-[680px] text-center text-base leading-8 text-slate-300 sm:mt-8 sm:text-lg sm:leading-9 lg:mx-0 lg:text-left lg:text-xl">
+        Create smarter and faster with{" "}
+        <span className="font-semibold text-white">32 AI-powered tools</span>{" "}
+        built for content creators. Generate ideas, write content, optimize
+        SEO, and simplify your creative workflow—all in one platform with{" "}
+        <span className="font-semibold text-white">RYNOVIX</span>.
       </p>
     </div>
   );

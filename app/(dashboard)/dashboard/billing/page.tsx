@@ -6,6 +6,13 @@ import UpgradeFAQ from "@/components/upgrade/UpgradeFAQ";
 
 import { createClient } from "@/lib/supabase/server";
 
+import {
+  getPlan,
+  type PlanId,
+} from "@/lib/billing/plans";
+
+
+
 
 
 export default async function BillingPage() {
@@ -24,32 +31,40 @@ export default async function BillingPage() {
 
 
 
+
   let profile = null;
+
 
 
 
 
   if (user) {
 
+
     const {
       data,
     } = await supabase
+
       .from("profiles")
+
       .select(
         `
         current_plan,
-        plan,
         credits
         `
       )
+
       .eq(
         "id",
         user.id
       )
+
       .single();
 
 
+
     profile = data;
+
 
   }
 
@@ -58,32 +73,56 @@ export default async function BillingPage() {
 
 
 
-  const currentPlan =
-    (
-      profile?.current_plan ||
-      profile?.plan ||
-      "free"
-    )
-    .toLowerCase();
+
+  const currentPlan = (
+
+    profile?.current_plan ||
+
+    "free"
+
+  ).toLowerCase();
 
 
 
 
 
-  const credits =
-    profile?.credits ?? 0;
+
+
+  // Get plan information from plans.ts
+
+  const plan = getPlan(
+
+    currentPlan as PlanId
+
+  );
 
 
 
 
 
+
+
+  // Total monthly credit allowance
 
   const totalCredits =
-    currentPlan === "pro"
-      ? 2000
-      : currentPlan === "business"
-      ? 10000
-      : 100;
+
+    plan?.credits ?? 300;
+
+
+
+
+
+
+
+  // Current user remaining credits
+
+  // If profile has no credit data,
+  // use plan default credits
+
+  const credits =
+
+    profile?.credits ?? totalCredits;
+
 
 
 
@@ -105,9 +144,12 @@ export default async function BillingPage() {
 
 
 
+
       {/* Page Header */}
 
+
       <div>
+
 
         <h1
           className="
@@ -116,8 +158,12 @@ export default async function BillingPage() {
           text-white
           "
         >
+
           Billing & Subscription
+
         </h1>
+
+
 
 
 
@@ -128,10 +174,13 @@ export default async function BillingPage() {
           text-slate-400
           "
         >
+
           Upgrade your RYNOVIX plan to unlock more AI credits,
           premium creator tools, faster AI generation,
           and all future AI features.
+
         </p>
+
 
 
       </div>
@@ -142,7 +191,9 @@ export default async function BillingPage() {
 
 
 
+
       {/* Current Plan + Credits */}
+
 
       <UpgradeHero
 
@@ -160,7 +211,10 @@ export default async function BillingPage() {
 
 
 
+
+
       {/* Pricing */}
+
 
       <PricingCards
 
@@ -174,12 +228,27 @@ export default async function BillingPage() {
 
 
 
+
+
+      {/* Plan Comparison */}
+
+
       <ComparisonTable />
 
 
 
+
+
+      {/* Upgrade CTA */}
+
+
       <UpgradeCTA />
 
+
+
+
+
+      {/* FAQ */}
 
 
       <UpgradeFAQ />
@@ -188,8 +257,10 @@ export default async function BillingPage() {
 
 
 
+
     </div>
 
   );
+
 
 }

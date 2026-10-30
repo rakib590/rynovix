@@ -8,29 +8,102 @@ import {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    
+let body: unknown;
 
-    const {
-      prompt,
-      json = false,
-      toolId,
-      count,
-      action,
-    } = body;
+try {
+  body = await req.json();
+} catch {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Invalid JSON request body.",
+    },
+    { status: 400 }
+  );
+}
+
+if (
+  !body ||
+  typeof body !== "object" ||
+  Array.isArray(body)
+) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Invalid request body.",
+    },
+    { status: 400 }
+  );
+}
+
+const payload = body as Record<string, unknown>;
+
+const prompt = payload.prompt;
+const json = payload.json;
+const toolId = payload.toolId;
+const count = payload.count;
+const action = payload.action;
+const words = payload.words;
+const seconds = payload.seconds;
+
 
     // ----------------------------------------------------------
     // BASIC VALIDATION
     // ----------------------------------------------------------
 
-    if (!prompt || typeof prompt !== "string") {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Prompt is required.",
-        },
-        { status: 400 }
-      );
-    }
+
+if (
+  typeof prompt !== "string" ||
+  !prompt.trim()
+) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Prompt is required.",
+    },
+    { status: 400 }
+  );
+}
+
+const cleanPrompt = prompt.trim();
+
+if (cleanPrompt.length > 20000) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Prompt is too long. Maximum 20,000 characters allowed.",
+    },
+    { status: 400 }
+  );
+}
+
+if (
+  json !== undefined &&
+  typeof json !== "boolean"
+) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Invalid JSON response option.",
+    },
+    { status: 400 }
+  );
+}
+
+if (
+  action !== undefined &&
+  action !== "generate" &&
+  action !== "regenerate"
+) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Invalid AI action.",
+    },
+    { status: 400 }
+  );
+}
 
     const validToolIds: AIToolId[] = [
       "title-generator",
@@ -43,22 +116,133 @@ export async function POST(req: Request) {
       "seo-checker",
       "keyword-generator",
       "best-upload-time",
+      "ai-chat-assistant",
+      "ai-image-generator",
+      "ai-video-generator",
+      "ai-voice-generator",
+      "ai-image-editor",
+      "ai-background-remover",
+      "ai-photo-enhancer",
+      "ai-clothes-changer",
+      "ai-image-upscaler",
+      "ai-avatar-generator",
+      "ai-ui-mockup-generator",
+      "ai-logo-generator",
+      "ai-color-palette-generator",
+      "image-converter",
+      "video-prompt-enhancer",
+      "video-hook-generator",
+      "ai-b-roll-generator",
+      "ai-video-scene-splitter",
+      "ai-subtitle-generator",
+      "ai-voice-sync-tool",
+      "ai-video-enhancer",
+      "ai-video-workflow-automation",
     ];
 
     if (
-      !toolId ||
-      !validToolIds.includes(toolId as AIToolId)
-    ) {
+  !toolId ||
+  typeof toolId !== "string" ||
+  !validToolIds.includes(toolId as AIToolId)
+) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Invalid or missing AI tool.",
+    },
+    { status: 400 }
+  );
+}
+
+const aiToolId = toolId as AIToolId;
+
+const normalizedCount =
+  count !== undefined ? Number(count) : undefined;
+
+const normalizedWords =
+  words !== undefined ? Number(words) : undefined;
+
+const normalizedSeconds =
+  seconds !== undefined ? Number(seconds) : undefined;
+
+if (
+  normalizedCount !== undefined &&
+  (!Number.isSafeInteger(normalizedCount) ||
+    normalizedCount < 1)
+) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Invalid result count.",
+    },
+    { status: 400 }
+  );
+}
+
+if (
+  normalizedWords !== undefined &&
+  (!Number.isSafeInteger(normalizedWords) ||
+    normalizedWords < 1)
+) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Invalid word count.",
+    },
+    { status: 400 }
+  );
+}
+
+if (
+  normalizedSeconds !== undefined &&
+  (!Number.isFinite(normalizedSeconds) ||
+    normalizedSeconds <= 0)
+) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Invalid duration.",
+    },
+    { status: 400 }
+  );
+}
+
+    // This endpoint uses an OpenAI-compatible TEXT chat model.
+    // Image/video/audio processing needs dedicated provider endpoints.
+    const mediaTools: AIToolId[] = [
+      "ai-image-generator",
+      "ai-video-generator",
+      "ai-voice-generator",
+      "ai-image-editor",
+      "ai-background-remover",
+      "ai-photo-enhancer",
+      "ai-clothes-changer",
+      "ai-image-upscaler",
+      "ai-avatar-generator",
+      "ai-ui-mockup-generator",
+      "ai-logo-generator",
+      "ai-b-roll-generator",
+      "ai-video-scene-splitter",
+      "ai-subtitle-generator",
+      "ai-voice-sync-tool",
+      "ai-video-enhancer",
+      "ai-video-workflow-automation",
+      "ai-color-palette-generator",
+      "image-converter",
+    ];
+
+    if (mediaTools.includes(aiToolId)) {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid or missing AI tool.",
+          error:
+            "This tool requires its dedicated image, video, audio, or browser-processing endpoint. It cannot run through the text AI endpoint yet.",
+          code: "DEDICATED_TOOL_ENDPOINT_REQUIRED",
+          toolId: aiToolId,
         },
-        { status: 400 }
+        { status: 501 }
       );
     }
-
-    const aiToolId = toolId as AIToolId;
 
     // ----------------------------------------------------------
     // MAX TOKENS
@@ -75,8 +259,31 @@ export async function POST(req: Request) {
       "seo-checker": 2000,
       "keyword-generator": 1000,
       "best-upload-time": 1000,
+      "ai-chat-assistant": 3000,
+      "video-prompt-enhancer": 2000,
+      "video-hook-generator": 1200,
+      // Dedicated media/code tools are rejected above.
+      "ai-image-generator": 1000,
+      "ai-video-generator": 1000,
+      "ai-voice-generator": 1000,
+      "ai-image-editor": 1000,
+      "ai-background-remover": 1000,
+      "ai-photo-enhancer": 1000,
+      "ai-clothes-changer": 1000,
+      "ai-image-upscaler": 1000,
+      "ai-avatar-generator": 1000,
+      "ai-ui-mockup-generator": 1000,
+      "ai-logo-generator": 1000,
+      "ai-color-palette-generator": 1000,
+      "image-converter": 1000,
+      "ai-b-roll-generator": 1000,
+      "ai-video-scene-splitter": 1000,
+      "ai-subtitle-generator": 1000,
+      "ai-voice-sync-tool": 1000,
+      "ai-video-enhancer": 1000,
+      "ai-video-workflow-automation": 1000,
     };
-
+    
     const maxCompletionTokens =
       maxTokensByTool[aiToolId];
 
@@ -97,14 +304,13 @@ export async function POST(req: Request) {
       ) {
         creditCost = 2;
       } else {
-        const normalizedCount =
-          count !== undefined
-            ? Number(count)
-            : undefined;
-
         creditCost = getCreditCost(
           aiToolId,
-          normalizedCount
+          normalizedCount,
+          {
+            words: normalizedWords,
+            seconds: normalizedSeconds,
+          }
         );
       }
     } catch (error: any) {
@@ -180,7 +386,7 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
-
+    
     // ----------------------------------------------------------
     // USER PROFILE
     // ----------------------------------------------------------
@@ -267,7 +473,10 @@ export async function POST(req: Request) {
     // CREDIT VALIDATION
     // ----------------------------------------------------------
 
-    if (currentCredits < 0) {
+    if (
+      !Number.isFinite(currentCredits) ||
+      currentCredits < 0
+    ) {
       console.error(
         "Invalid negative credit balance:",
         {
@@ -285,8 +494,8 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
-
-    if (currentCredits < creditCost) {
+    
+      if (currentCredits < creditCost) {
       return NextResponse.json(
         {
           success: false,
@@ -302,7 +511,7 @@ export async function POST(req: Request) {
         { status: 402 }
       );
     }
-
+    
     // ----------------------------------------------------------
     // MODEL DETECTION
     // ----------------------------------------------------------
@@ -359,7 +568,7 @@ export async function POST(req: Request) {
           additionalProperties: false,
         },
       },
-
+      
       "description-generator": {
         name: "description_generator_response",
         strict: true,
@@ -398,7 +607,7 @@ export async function POST(req: Request) {
           additionalProperties: false,
         },
       },
-
+      
       "hashtag-generator": {
         name: "hashtag_generator_response",
         strict: true,
@@ -463,7 +672,7 @@ export async function POST(req: Request) {
           additionalProperties: false,
         },
       },
-
+      
       "script-writer": {
         name: "script_writer_response",
         strict: true,
@@ -565,7 +774,7 @@ export async function POST(req: Request) {
           additionalProperties: false,
         },
       },
-
+      
       "thumbnail-title": {
         name: "thumbnail_title_response",
         strict: true,
@@ -608,7 +817,7 @@ export async function POST(req: Request) {
           additionalProperties: false,
         },
       },
-
+      
       "seo-checker": {
         name: "seo_checker_response",
         strict: true,
@@ -666,7 +875,7 @@ export async function POST(req: Request) {
           additionalProperties: false,
         },
       },
-
+      
       "keyword-generator": {
         name: "keyword_generator_response",
         strict: true,
@@ -709,7 +918,7 @@ export async function POST(req: Request) {
           additionalProperties: false,
         },
       },
-
+      
       "best-upload-time": {
         name: "best_upload_time_response",
         strict: true,
@@ -761,7 +970,7 @@ export async function POST(req: Request) {
         },
       },
     };
-
+    
     // ----------------------------------------------------------
     // REGENERATE JSON SCHEMAS
     // ----------------------------------------------------------
@@ -805,7 +1014,7 @@ export async function POST(req: Request) {
           additionalProperties: false,
         },
       },
-
+      
       "shorts-ideas": {
         name: "shorts_ideas_regenerate_response",
         strict: true,
@@ -850,7 +1059,7 @@ export async function POST(req: Request) {
           additionalProperties: false,
         },
       },
-
+      
       "thumbnail-title": {
         name: "thumbnail_title_regenerate_response",
         strict: true,
@@ -884,7 +1093,7 @@ export async function POST(req: Request) {
         },
       },
     };
-
+    
     // ----------------------------------------------------------
     // AI REQUEST
     // ----------------------------------------------------------
@@ -894,7 +1103,7 @@ export async function POST(req: Request) {
       messages: [
         {
           role: "user",
-          content: prompt,
+          content: cleanPrompt,
         },
       ],
       temperature: 0.7,
@@ -924,84 +1133,139 @@ export async function POST(req: Request) {
           type: "json_schema",
           json_schema: schema,
         };
-      } else if (isGptOss) {
+      } else {
         aiRequest.response_format = {
           type: "json_object",
         };
       }
     }
+    
+ // ----------------------------------------------------------
+// RESERVE / DEDUCT CREDITS BEFORE AI GENERATION
+// ----------------------------------------------------------
 
-    // ----------------------------------------------------------
-    // AI GENERATION
-    // ----------------------------------------------------------
+let deductionResult: {
+  success: boolean;
+  credits?: number;
+  error?: string;
+} = {
+  success: true,
+  credits: currentCredits,
+};
 
-    const completion =
-      await ai.chat.completions.create(
-        aiRequest
-      );
+let creditsDeducted = false;
 
-    const result =
-      completion.choices[0]?.message?.content;
+if (creditCost > 0) {
+  const {
+    data,
+    error: deductionError,
+  } = await supabase.rpc("deduct_credits", {
+    p_user_id: user.id,
+    p_cost: creditCost,
+  });
 
-    if (!result?.trim()) {
-      throw new Error(
-        "AI returned an empty response."
-      );
-    }
+  if (deductionError) {
+    console.error(
+      "Credit deduction error:",
+      deductionError
+    );
 
-    // ----------------------------------------------------------
-    // DEDUCT CREDITS
-    // ----------------------------------------------------------
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Unable to reserve credits for this AI request.",
+      },
+      { status: 500 }
+    );
+  }
 
+  if (!data?.success) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          data?.error || "Unable to deduct credits.",
+        code:
+          data?.error === "Not enough credits."
+            ? "INSUFFICIENT_CREDITS"
+            : "CREDIT_DEDUCTION_FAILED",
+        credits:
+          data?.credits ?? currentCredits,
+        requiredCredits: creditCost,
+        plan: currentPlan,
+        monthlyCreditLimit,
+      },
+      {
+        status:
+          data?.error === "Not enough credits."
+            ? 402
+            : 500,
+      }
+    );
+  }
+
+  deductionResult = data;
+  creditsDeducted = true;
+}
+
+// ----------------------------------------------------------
+// AI GENERATION
+// ----------------------------------------------------------
+
+let result: string;
+
+try {
+  const completion =
+    await ai.chat.completions.create(
+      aiRequest
+    );
+
+  const generatedContent =
+    completion.choices[0]?.message?.content;
+
+  if (!generatedContent?.trim()) {
+    throw new Error(
+      "AI returned an empty response."
+    );
+  }
+
+  result = generatedContent;
+} catch (generationError) {
+  // --------------------------------------------------------
+  // REFUND CREDITS IF AI GENERATION FAILS
+  // --------------------------------------------------------
+
+  if (creditsDeducted && creditCost > 0) {
     const {
-      data: deductionResult,
-      error: deductionError,
+      data: refundData,
+      error: refundError,
     } = await supabase.rpc(
-      "deduct_credits",
+      "refund_credits",
       {
         p_user_id: user.id,
         p_cost: creditCost,
       }
     );
 
-    if (deductionError) {
+    if (refundError || !refundData?.success) {
       console.error(
-        "Credit deduction error:",
-        deductionError
+        "Credit refund failed:",
+        refundError || refundData
       );
 
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "AI generation succeeded, but credits could not be updated. Please contact support.",
-        },
-        { status: 500 }
+      throw new Error(
+        "AI generation failed and the automatic credit refund could not be completed. Please contact support."
       );
     }
 
-    if (!deductionResult?.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            deductionResult?.error ||
-            "Unable to deduct credits.",
-          code:
-            deductionResult?.error ===
-            "Not enough credits."
-              ? "INSUFFICIENT_CREDITS"
-              : "CREDIT_DEDUCTION_FAILED",
-          credits:
-            deductionResult?.credits ??
-            currentCredits,
-          requiredCredits: creditCost,
-          plan: currentPlan,
-          monthlyCreditLimit,
-        },
-        { status: 402 }
-      );
-    }
+    deductionResult = refundData;
+    creditsDeducted = false;
+  }
+
+  throw generationError;
+}
+
 
     // ----------------------------------------------------------
     // SAVE HISTORY
@@ -1055,8 +1319,30 @@ export async function POST(req: Request) {
           "Keyword Generator",
         "best-upload-time":
           "Best Upload Time",
+        "ai-chat-assistant": "AI Chat Assistant",
+        "ai-image-generator": "AI Image Generator",
+        "ai-video-generator": "AI Video Generator",
+        "ai-voice-generator": "AI Voice Generator",
+        "ai-image-editor": "AI Image Editor",
+        "ai-background-remover": "AI Background Remover",
+        "ai-photo-enhancer": "AI Photo Enhancer",
+        "ai-clothes-changer": "AI Clothes Changer",
+        "ai-image-upscaler": "AI Image Upscaler",
+        "ai-avatar-generator": "AI Avatar Generator",
+        "ai-ui-mockup-generator": "AI UI Mockup Generator",
+        "ai-logo-generator": "AI Logo Generator",
+        "ai-color-palette-generator": "AI Color Palette Generator",
+        "image-converter": "Image Converter",
+        "video-prompt-enhancer": "Video Prompt Enhancer",
+        "video-hook-generator": "Video Hook Generator",
+        "ai-b-roll-generator": "AI B-Roll Generator",
+        "ai-video-scene-splitter": "AI Video Scene Splitter",
+        "ai-subtitle-generator": "AI Subtitle Generator",
+        "ai-voice-sync-tool": "AI Voice Sync Tool",
+        "ai-video-enhancer": "AI Video Enhancer",
+        "ai-video-workflow-automation": "AI Video Workflow Automation",
       };
-
+      
       const { data: historyData, error: historyError } =
   await supabase
     .from("ai_history")
@@ -1065,7 +1351,7 @@ export async function POST(req: Request) {
       tool_id: aiToolId,
       tool_name: toolNames[aiToolId],
       title: toolNames[aiToolId],
-      prompt,
+      prompt: cleanPrompt,
       result: parsedResult,
       score,
       credits_used: creditCost,
@@ -1088,10 +1374,10 @@ if (historyError) {
 
 } else {
 
-  console.log(
-    "AI HISTORY SAVED:",
-    historyData
-  );
+  console.log("AI HISTORY SAVED:", {
+    historyId: historyData?.id,
+    toolId: aiToolId,
+  });
 
 }
     } catch (historyError) {
@@ -1100,7 +1386,7 @@ if (historyError) {
         historyError
       );
     }
-
+    
         // ----------------------------------------------------------
     // CREATE AI GENERATION NOTIFICATION
     // ----------------------------------------------------------
@@ -1130,9 +1416,32 @@ if (historyError) {
           "thumbnail-title": "Thumbnail Title",
           "seo-checker": "SEO Checker",
           "keyword-generator": "Keyword Generator",
-          "best-upload-time": "Best Upload Time",
+          "best-upload-time":
+            "Best Upload Time",
+          "ai-chat-assistant": "AI Chat Assistant",
+          "ai-image-generator": "AI Image Generator",
+          "ai-video-generator": "AI Video Generator",
+          "ai-voice-generator": "AI Voice Generator",
+          "ai-image-editor": "AI Image Editor",
+          "ai-background-remover": "AI Background Remover",
+          "ai-photo-enhancer": "AI Photo Enhancer",
+          "ai-clothes-changer": "AI Clothes Changer",
+          "ai-image-upscaler": "AI Image Upscaler",
+          "ai-avatar-generator": "AI Avatar Generator",
+          "ai-ui-mockup-generator": "AI UI Mockup Generator",
+          "ai-logo-generator": "AI Logo Generator",
+          "ai-color-palette-generator": "AI Color Palette Generator",
+          "image-converter": "Image Converter",
+          "video-prompt-enhancer": "Video Prompt Enhancer",
+          "video-hook-generator": "Video Hook Generator",
+          "ai-b-roll-generator": "AI B-Roll Generator",
+          "ai-video-scene-splitter": "AI Video Scene Splitter",
+          "ai-subtitle-generator": "AI Subtitle Generator",
+          "ai-voice-sync-tool": "AI Voice Sync Tool",
+          "ai-video-enhancer": "AI Video Enhancer",
+          "ai-video-workflow-automation": "AI Video Workflow Automation",
         };
-
+        
         const { data: notificationData, error: notificationError } =
         await supabase
     .from("notifications")
@@ -1180,32 +1489,40 @@ if (notificationError) {
     // SUCCESS RESPONSE
     // ----------------------------------------------------------
 
+    const updatedCredits =
+      typeof deductionResult?.credits === "number"
+        ? deductionResult.credits
+        : currentCredits;
+
     return NextResponse.json({
       success: true,
       result,
-      credits:
-        deductionResult.credits,
+      credits: updatedCredits,
       creditsUsed: creditCost,
       toolId: aiToolId,
-      action:
-        action || "generate",
+      action: action || "generate",
       plan: currentPlan,
       monthlyCreditLimit,
-      creditsResetAt:
-        profile.credits_reset_at ||
-        null,
+      creditsResetAt: profile.credits_reset_at || null,
     });
-  } catch (error: any) {
-    console.error(
-      "AI API ERROR:",
-      error
-    );
 
-    const groqError =
-      error?.error || error;
+  } catch (error: unknown) {
+    console.error("AI API ERROR:", error);
+
+    const apiError = error as {
+      error?: {
+        message?: string;
+        failed_generation?: unknown;
+      };
+      message?: string;
+      failed_generation?: unknown;
+    };
+
+    const groqError = apiError?.error || apiError;
 
     const failedGeneration =
-      groqError?.failed_generation;
+      groqError?.failed_generation ||
+      apiError?.failed_generation;
 
     console.error(
       "Groq failed_generation:",
@@ -1217,15 +1534,13 @@ if (notificationError) {
         success: false,
         error:
           groqError?.message ||
-          error?.message ||
+          apiError?.message ||
           "AI request failed.",
 
-        ...(process.env.NODE_ENV !==
-          "production" &&
+        ...(process.env.NODE_ENV !== "production" &&
         failedGeneration
           ? {
-              failed_generation:
-                failedGeneration,
+              failed_generation: failedGeneration,
             }
           : {}),
       },

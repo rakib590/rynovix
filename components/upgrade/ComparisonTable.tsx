@@ -3,6 +3,11 @@
 import { Check, ChevronDown, ChevronUp, X } from "lucide-react";
 import { useState } from "react";
 
+
+// ============================================================
+// FEATURE TYPE
+// ============================================================
+
 interface FeatureRow {
   name: string;
   free: string | boolean;
@@ -10,119 +15,206 @@ interface FeatureRow {
   business: string | boolean;
 }
 
+
+
+// ============================================================
+// PLAN COMPARISON FEATURES
+// ============================================================
+
 const features: FeatureRow[] = [
   {
     name: "AI Credits / Month",
-    free: "100",
-    pro: "2,000",
-    business: "10,000",
+    free: "300",
+    pro: "5,000",
+    business: "15,000",
   },
+
   {
-    name: "YouTube Creator Tools",
+    name: "Access to All 32 AI Tools",
+    free: "Limited",
+    pro: true,
+    business: true,
+  },
+
+  {
+    name: "AI Creator Tools",
     free: true,
     pro: true,
     business: true,
   },
+
   {
     name: "Title Generator",
     free: true,
     pro: true,
     business: true,
   },
+
   {
     name: "Description Generator",
     free: true,
     pro: true,
     business: true,
   },
+
   {
     name: "Hashtag Generator",
     free: true,
     pro: true,
     business: true,
   },
+
   {
     name: "Tags Generator",
     free: true,
     pro: true,
     business: true,
   },
+
   {
     name: "Script Writer",
     free: true,
     pro: true,
     business: true,
   },
+
   {
     name: "Shorts Ideas",
     free: true,
     pro: true,
     business: true,
   },
+
   {
     name: "Thumbnail Title",
     free: true,
     pro: true,
     business: true,
   },
+
   {
     name: "SEO Checker",
     free: true,
     pro: true,
     business: true,
   },
+
   {
     name: "Keyword Generator",
     free: true,
     pro: true,
     business: true,
   },
+
   {
     name: "Best Upload Time",
     free: true,
     pro: true,
     business: true,
   },
+
+  {
+    name: "AI Color Palette Generator",
+    free: true,
+    pro: true,
+    business: true,
+  },
+
+  {
+    name: "Image Converter",
+    free: true,
+    pro: true,
+    business: true,
+  },
+
+  {
+    name: "AI Image Generation",
+    free: "Limited",
+    pro: true,
+    business: true,
+  },
+
+  {
+    name: "AI Video Generation",
+    free: "Limited",
+    pro: true,
+    business: true,
+  },
+
+  {
+    name: "AI Voice Generation",
+    free: false,
+    pro: true,
+    business: true,
+  },
+
   {
     name: "AI Generation Speed",
     free: "Standard",
     pro: "Fast",
     business: "Priority",
   },
+
   {
-    name: "Premium AI Features",
+    name: "Priority Generation Queue",
     free: false,
     pro: true,
     business: true,
   },
+
   {
-    name: "Advanced SEO",
+    name: "HD Export Quality",
     free: false,
     pro: true,
     business: true,
   },
+
+  {
+    name: "AI History",
+    free: true,
+    pro: "Unlimited",
+    business: "Unlimited",
+  },
+
+  {
+    name: "Commercial Usage",
+    free: false,
+    pro: true,
+    business: true,
+  },
+
   {
     name: "Team Workspace",
     free: false,
     pro: false,
     business: true,
   },
+
   {
-    name: "Priority Support",
-    free: false,
-    pro: true,
-    business: true,
-  },
-  {
-    name: "Business Support",
+    name: "Future AI Models Access",
     free: false,
     pro: false,
     business: true,
   },
+
   {
-    name: "Early Access to New Features",
+    name: "Future API Access",
     free: false,
+    pro: false,
+    business: true,
+  },
+
+  {
+    name: "Priority Support",
+    free: "Community",
     pro: true,
+    business: true,
+  },
+
+  {
+    name: "Business Priority Support",
+    free: false,
+    pro: false,
     business: true,
   },
 ];
